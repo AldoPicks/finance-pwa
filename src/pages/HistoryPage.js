@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import { useFinance } from '../context/FinanceContext';
 import { useAuth } from '../context/AuthContext';
-import { fromMonthKey } from '../db/schema';
+import { fromMonthKey } from '../firebase/services';
 
 const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(n);

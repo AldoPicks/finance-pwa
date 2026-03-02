@@ -1,275 +1,295 @@
-# FinanzasPro — PWA de Gestión de Finanzas
+# 💰 FinanzasPro
 
-Una aplicación web progresiva (PWA) para gestionar finanzas personales, construida con React, Material-UI y Chart.js. Funciona offline, es instalable en móvil/desktop, y soporta integración con Firebase y APIs externas.
+App PWA de finanzas personales construida con React + Material UI + Firebase.
 
----
-
-## 📋 Características
-
-- 🔐 **Autenticación** — Login con mock local (localStorage) o Firebase Auth
-- 📊 **Dashboard** — Resumen mensual con tarjetas, tabla editable y gráficos
-- ✏️ **Tabla editable** — Gastos por semana con cálculo automático de totales y ahorros
-- 🥧 **Gráfico de pie** — Distribución de gastos por categoría (Chart.js)
-- 📊 **Gráfico de barras** — Gastos semanales apilados
-- ⚠️ **Alertas** — Snackbar si el abono al carro supera el 50% del ingreso
-- 💱 **Tipo de cambio** — Integración con Exchange Rates API (MXN → USD)
-- 📱 **PWA** — Instalable, con Service Worker y caché offline
-- 🔥 **Firebase** — Integración opcional para Auth y Firestore documentada
+**Funcionalidades:**
+- 📊 Dashboard mensual con tabla de gastos por semana
+- ➕ Registro de gastos con categorías personalizadas
+- 💳 Gestión de tarjetas de crédito con alertas de pago
+- 📋 Historial con gráficas de tendencias
+- 🔔 Notificaciones push de fechas de pago
+- 📝 Sistema de auditoría — registro de todas las acciones
+- 🌙 Modo claro/oscuro
+- ☁️ Datos en la nube con Firebase (acceso desde cualquier dispositivo)
 
 ---
 
-## 🚀 Setup rápido (mock local, sin Firebase)
+## 📋 Requisitos previos
 
-### 1. Instalar Node.js y npm
-
-Descarga Node.js v18+ desde https://nodejs.org  
-Verifica la instalación:
-
-```bash
-node --version   # v18+
-npm --version    # v9+
-```
-
-### 2. Crear el proyecto
-
-```bash
-npx create-react-app finance-pwa
-cd finance-pwa
-```
-
-### 3. Instalar dependencias
-
-```bash
-npm install \
-  @mui/material \
-  @mui/icons-material \
-  @emotion/react \
-  @emotion/styled \
-  chart.js \
-  react-chartjs-2 \
-  react-router-dom \
-  firebase
-```
-
-### 4. Copiar los archivos del proyecto
-
-Reemplaza los archivos de `src/` y `public/` con los del repositorio:
-
-```
-src/
-  index.js
-  App.js
-  context/
-    AuthContext.js
-    FinanceContext.js
-  hooks/
-    useExchangeRate.js
-  pages/
-    Login.js
-    Dashboard.js
-  components/
-    SummaryCard.js
-    FinanceTable.js
-    PieChart.js
-    BarChart.js
-public/
-  index.html
-  manifest.json
-  service-worker.js
-```
-
-### 5. Variables de entorno (opcionales)
-
-Crea un archivo `.env` en la raíz del proyecto:
-
-```env
-# Exchange Rates API (gratuito en https://www.exchangerate-api.com)
-REACT_APP_EXCHANGE_API_KEY=tu_api_key_aqui
-
-# Firebase (ver sección Firebase más abajo)
-REACT_APP_FIREBASE_API_KEY=
-REACT_APP_FIREBASE_AUTH_DOMAIN=
-REACT_APP_FIREBASE_PROJECT_ID=
-REACT_APP_FIREBASE_STORAGE_BUCKET=
-REACT_APP_FIREBASE_MESSAGING_SENDER_ID=
-REACT_APP_FIREBASE_APP_ID=
-```
-
-> Sin variables de entorno, la app usa datos mock y tasa de cambio hardcodeada.
-
-### 6. Correr localmente
-
-```bash
-npm start
-```
-
-Abre http://localhost:3000
-
-**Credenciales de demo:**
-- `demo@finanzaspro.com` / `demo123`
-- `admin@finanzaspro.com` / `admin123`
+- [Node.js](https://nodejs.org/) v16 o superior
+- Cuenta de Google (para Firebase)
+- Cuenta de GitHub (para el despliegue)
 
 ---
 
-## 🔥 Configuración Firebase (Opcional)
+## 🔥 Paso 1 — Crear proyecto en Firebase
 
-### Auth + Firestore gratuitos
+### 1.1 Crear cuenta y proyecto
 
-1. Ve a https://console.firebase.google.com y crea un proyecto
-2. Activa **Authentication** → Sign-in method → Email/Password
-3. Activa **Firestore Database** → Modo de prueba (gratuito 90 días, luego configura reglas)
-4. Ve a **Project settings** → Config de la app web → Copia las credenciales
+1. Ve a [console.firebase.google.com](https://console.firebase.google.com)
+2. Haz clic en **"Agregar proyecto"**
+3. Escribe un nombre, por ejemplo: `finanzaspro`
+4. Desactiva Google Analytics (no es necesario)
+5. Haz clic en **"Crear proyecto"** y espera ~30 segundos
 
-Crea `src/firebase.js`:
+### 1.2 Activar Authentication
 
-```js
-import { initializeApp } from 'firebase/app';
-import { getAuth } from 'firebase/auth';
-import { getFirestore } from 'firebase/firestore';
+1. Menú izquierdo: **Build → Authentication**
+2. Haz clic en **"Comenzar"**
+3. Pestaña **"Sign-in method"** → **"Correo electrónico/contraseña"**
+4. Activa la primera opción y guarda
 
-const firebaseConfig = {
-  apiKey: process.env.REACT_APP_FIREBASE_API_KEY,
-  authDomain: process.env.REACT_APP_FIREBASE_AUTH_DOMAIN,
-  projectId: process.env.REACT_APP_FIREBASE_PROJECT_ID,
-  storageBucket: process.env.REACT_APP_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: process.env.REACT_APP_FIREBASE_MESSAGING_SENDER_ID,
-  appId: process.env.REACT_APP_FIREBASE_APP_ID,
-};
+### 1.3 Crear base de datos Firestore
 
-const app = initializeApp(firebaseConfig);
-export const auth = getAuth(app);
-export const db = getFirestore(app);
-```
+1. Menú izquierdo: **Build → Firestore Database**
+2. Haz clic en **"Crear base de datos"**
+3. Selecciona **"Comenzar en modo de producción"**
+4. Elige región: `nam5 (us-central)` para México
+5. Haz clic en **"Listo"**
 
-Ver comentarios en `src/context/AuthContext.js` y `src/context/FinanceContext.js` para instrucciones de migración.
+### 1.4 Configurar reglas de seguridad de Firestore ⚠️
 
----
+En **Firestore → pestaña "Reglas"**, reemplaza todo el contenido con:
 
-## 💱 Exchange Rates API
-
-1. Crea cuenta gratuita en https://www.exchangerate-api.com (1,500 req/mes)
-2. Copia tu API key al `.env`: `REACT_APP_EXCHANGE_API_KEY=...`
-3. El hook `useExchangeRate` se encarga del resto automáticamente
-
----
-
-## 🪙 CoinGecko (Crypto — sin API key)
-
-```js
-// Ejemplo de uso en cualquier componente:
-const res = await fetch(
-  'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=mxn,usd'
-);
-const data = await res.json();
-// data.bitcoin = { mxn: 900000, usd: 45000 }
-```
-
----
-
-## 🏗️ Build y Deploy
-
-### Build de producción
-
-```bash
-npm run build
-```
-
-Genera la carpeta `build/` optimizada para producción.
-
-### Deploy en Netlify (gratuito)
-
-1. Instala Netlify CLI: `npm install -g netlify-cli`
-2. Autentícate: `netlify login`
-3. Deploy:
-   ```bash
-   netlify deploy --prod --dir=build
-   ```
-
-O arrastra la carpeta `build/` a https://app.netlify.com/drop
-
-### Deploy en Vercel (gratuito)
-
-```bash
-npm install -g vercel
-vercel --prod
-```
-
-### Deploy en GitHub Pages
-
-```bash
-npm install --save-dev gh-pages
-```
-
-Agrega en `package.json`:
-```json
-{
-  "homepage": "https://tuusuario.github.io/finance-pwa",
-  "scripts": {
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d build"
+```javascript
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
   }
 }
 ```
 
+Haz clic en **"Publicar"**. Sin esto, los datos de los usuarios no estarán protegidos.
+
+### 1.5 Crear índices en Firestore
+
+En **Firestore → pestaña "Índices"**, crea:
+
+| Colección | Campo 1 | Campo 2 | Alcance |
+|-----------|---------|---------|---------|
+| `expenses` | `monthKey` ASC | `fecha` DESC | Colección |
+| `cards` | `activa` ASC | `createdAt` ASC | Colección |
+| `audit` | `timestamp` DESC | — | Colección |
+
+> 💡 **Alternativa fácil:** Al abrir la app por primera vez, Firebase mostrará errores en la consola del navegador (F12) con enlaces para crear los índices automáticamente. Haz clic en esos enlaces.
+
+### 1.6 Obtener credenciales
+
+1. ⚙️ Configuración del proyecto → **"Tus apps"** → ícono `</>`
+2. Nombre: `finanzaspro-web` → Registrar app
+3. Copia el objeto `firebaseConfig`
+
+---
+
+## ⚙️ Paso 2 — Configurar localmente
+
 ```bash
-npm run deploy
+# 1. Entra a la carpeta del proyecto
+cd finance-pwa
+
+# 2. Copia el archivo de ejemplo
+cp .env.example .env.local
+
+# 3. Edita .env.local con tus credenciales de Firebase
+# (usa cualquier editor de texto)
+
+# 4. Instala dependencias
+npm install
+
+# 5. Inicia el servidor de desarrollo
+npm start
+```
+
+Tu `.env.local` debe verse así:
+
+```env
+REACT_APP_FIREBASE_API_KEY=AIzaSy...
+REACT_APP_FIREBASE_AUTH_DOMAIN=tu-proyecto.firebaseapp.com
+REACT_APP_FIREBASE_PROJECT_ID=tu-proyecto
+REACT_APP_FIREBASE_STORAGE_BUCKET=tu-proyecto.appspot.com
+REACT_APP_FIREBASE_MESSAGING_SENDER_ID=123456789
+REACT_APP_FIREBASE_APP_ID=1:123456789:web:abc123
 ```
 
 ---
 
-## 📱 PWA — Instalación
+## 🚀 Paso 3 — Desplegar en GitHub Pages
 
-Una vez desplegada, el navegador mostrará un botón "Instalar app" en la barra de direcciones.
+### 3.1 Crear repositorio en GitHub
 
-**En móvil (Android/iOS):**
-- Chrome/Edge: Menú → "Agregar a pantalla de inicio"
-- Safari iOS: Compartir → "Agregar a pantalla de inicio"
+1. Ve a [github.com/new](https://github.com/new)
+2. Nombre: `finanzaspro`
+3. **Visibilidad: Privado** (recomendado)
+4. Crear repositorio
 
-El Service Worker guardará los assets en caché para uso offline.
+### 3.2 Subir el código
 
----
-
-## 🏗️ Estructura del proyecto
-
-```
-src/
-├── App.js                    # Rutas y tema MUI
-├── index.js                  # Entry point + registro SW
-├── context/
-│   ├── AuthContext.js        # Autenticación (mock/Firebase)
-│   └── FinanceContext.js     # Estado de finanzas + persistencia
-├── hooks/
-│   └── useExchangeRate.js    # Tipo de cambio MXN/USD
-├── pages/
-│   ├── Login.js              # Pantalla de login
-│   └── Dashboard.js          # Dashboard principal
-└── components/
-    ├── SummaryCard.js        # Tarjeta de resumen
-    ├── FinanceTable.js       # Tabla editable de gastos
-    ├── PieChart.js           # Gráfico de pie por categoría
-    └── BarChart.js           # Gráfico de barras por semana
-public/
-├── index.html                # HTML base + Google Fonts
-├── manifest.json             # Manifest PWA
-└── service-worker.js         # SW para caché offline
+```bash
+git init
+git add .
+git commit -m "Initial commit"
+git branch -M main
+git remote add origin https://github.com/TU_USUARIO/finanzaspro.git
+git push -u origin main
 ```
 
+### 3.3 Crear el workflow de deploy automático
+
+Crea el archivo `.github/workflows/deploy.yml`:
+
+```yaml
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          REACT_APP_FIREBASE_API_KEY: ${{ secrets.REACT_APP_FIREBASE_API_KEY }}
+          REACT_APP_FIREBASE_AUTH_DOMAIN: ${{ secrets.REACT_APP_FIREBASE_AUTH_DOMAIN }}
+          REACT_APP_FIREBASE_PROJECT_ID: ${{ secrets.REACT_APP_FIREBASE_PROJECT_ID }}
+          REACT_APP_FIREBASE_STORAGE_BUCKET: ${{ secrets.REACT_APP_FIREBASE_STORAGE_BUCKET }}
+          REACT_APP_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.REACT_APP_FIREBASE_MESSAGING_SENDER_ID }}
+          REACT_APP_FIREBASE_APP_ID: ${{ secrets.REACT_APP_FIREBASE_APP_ID }}
+        run: npm run build
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./build
+```
+
+### 3.4 Agregar los Secrets en GitHub
+
+En tu repositorio: **Settings → Secrets and variables → Actions → New repository secret**
+
+Crea estos 6 secrets con los valores de tu `firebaseConfig`:
+
+| Nombre del secret | Valor |
+|-------------------|-------|
+| `REACT_APP_FIREBASE_API_KEY` | tu apiKey |
+| `REACT_APP_FIREBASE_AUTH_DOMAIN` | tu authDomain |
+| `REACT_APP_FIREBASE_PROJECT_ID` | tu projectId |
+| `REACT_APP_FIREBASE_STORAGE_BUCKET` | tu storageBucket |
+| `REACT_APP_FIREBASE_MESSAGING_SENDER_ID` | tu messagingSenderId |
+| `REACT_APP_FIREBASE_APP_ID` | tu appId |
+
+### 3.5 Activar GitHub Pages
+
+**Settings → Pages → Source:** Deploy from a branch → rama `gh-pages` → Save
+
+### 3.6 Hacer push y esperar el deploy
+
+```bash
+git add .github/
+git commit -m "Add deploy workflow"
+git push
+```
+
+En ~3 minutos la app estará en: `https://TU_USUARIO.github.io/finanzaspro/`
+
+Puedes ver el progreso en la pestaña **"Actions"** del repositorio.
+
+### 3.7 Autorizar el dominio en Firebase
+
+1. Firebase Console → **Authentication → Settings → Authorized domains**
+2. **"Add domain"** → `TU_USUARIO.github.io`
+3. Guardar
+
 ---
 
-## 🛠️ Dependencias principales
+## 🔄 Actualizar la app
 
-| Paquete | Versión | Uso |
-|---|---|---|
-| `react` | 18.x | UI framework |
-| `react-router-dom` | 6.x | Navegación SPA |
-| `@mui/material` | 5.x | Componentes UI |
-| `@mui/icons-material` | 5.x | Iconos |
-| `chart.js` | 4.x | Motor de gráficos |
-| `react-chartjs-2` | 5.x | Wrapper React para Chart.js |
-| `firebase` | 10.x | Auth + Firestore (opcional) |
+Cada vez que hagas cambios y hagas push a `main`, GitHub Actions desplegará automáticamente:
+
+```bash
+git add .
+git commit -m "Descripción del cambio"
+git push
+```
 
 ---
 
-## 📝 Licencia
+## ❓ Preguntas frecuentes
 
-MIT — libre para uso personal y comercial.
+**¿Es seguro el apiKey de Firebase en el código compilado?**
+
+Sí. El `apiKey` de Firebase es una credencial **pública del cliente** (similar a un ID de proyecto) — no es una contraseña del servidor. Firebase no necesita ocultarlo porque la seguridad real viene de las **reglas de Firestore** (paso 1.4): aunque alguien vea tu apiKey, solo puede acceder a los datos que las reglas permiten (ninguno, si no está autenticado como el usuario correcto).
+
+**¿Cuánto cuesta Firebase?**
+
+El plan gratuito Spark incluye 50,000 lecturas/día y 20,000 escrituras/día. Para uso personal nunca lo superarás.
+
+**¿Funciona sin internet?**
+
+Sí. Firebase tiene persistencia offline activada. Los datos se sincronizan cuando vuelve la conexión.
+
+**¿Puedo usar la app desde el celular?**
+
+Sí. Al estar en Firebase, los datos son accesibles desde cualquier dispositivo. También puedes instalarla como PWA desde el navegador móvil.
+
+---
+
+## 📁 Estructura del proyecto
+
+```
+finance-pwa/
+├── .env.example              ← Plantilla de variables de entorno
+├── .env.local                ← Tus credenciales (NO se sube a git)
+├── .gitignore
+├── .github/workflows/
+│   └── deploy.yml            ← Deploy automático a GitHub Pages
+├── public/
+└── src/
+    ├── firebase/
+    │   ├── config.js         ← Configuración de Firebase
+    │   └── services.js       ← Servicios de Firestore
+    ├── context/
+    │   ├── AuthContext.js    ← Firebase Authentication
+    │   ├── FinanceContext.js
+    │   ├── AuditContext.js
+    │   └── ThemeContext.js
+    ├── pages/
+    │   ├── Dashboard.js
+    │   ├── Login.js
+    │   ├── ExpensesPage.js
+    │   ├── CardsPage.js
+    │   ├── CategoriesPage.js
+    │   ├── HistoryPage.js
+    │   ├── LogsPage.js
+    │   └── UserProfile.js
+    └── components/
+```
+
+## 🗄️ Estructura de Firestore
+
+```
+users/{uid}/
+  ├── [documento raíz]         → perfil: nombre, email, prefs...
+  ├── categories/{catId}       → nombre, color, icono, activa
+  ├── months/{YYYY-MM}         → income, rows[], notes
+  ├── expenses/{expId}         → monto, descripcion, fecha, categoryId
+  ├── cards/{cardId}           → limiteTotal, saldoActual, diaPago, pagos[]
+  ├── history/{YYYY-MM}        → snapshots: totalExpenses, savings
+  └── audit/{logId}            → action, detail, before, after, timestamp
+```

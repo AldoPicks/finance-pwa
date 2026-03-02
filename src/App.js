@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider, CssBaseline } from '@mui/material';
 import { ThemeContextProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { AuditProvider } from './context/AuditContext';
 import { FinanceProvider } from './context/FinanceContext';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -13,6 +14,26 @@ function PrivateRoute({ children }) {
   return user ? children : <Navigate to="/login" replace />;
 }
 
+function AppInner() {
+  return (
+    <AuditProvider>
+      <FinanceProvider>
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route
+            path="/*"
+            element={
+              <PrivateRoute>
+                <Dashboard />
+              </PrivateRoute>
+            }
+          />
+        </Routes>
+      </FinanceProvider>
+    </AuditProvider>
+  );
+}
+
 export default function App() {
   return (
     <ThemeContextProvider>
@@ -21,19 +42,7 @@ export default function App() {
           <CssBaseline />
           <BrowserRouter>
             <AuthProvider>
-              <FinanceProvider>
-                <Routes>
-                  <Route path="/login" element={<Login />} />
-                  <Route
-                    path="/*"
-                    element={
-                      <PrivateRoute>
-                        <Dashboard />
-                      </PrivateRoute>
-                    }
-                  />
-                </Routes>
-              </FinanceProvider>
+              <AppInner />
             </AuthProvider>
           </BrowserRouter>
         </ThemeProvider>

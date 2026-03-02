@@ -7,7 +7,7 @@ import {
   ChevronLeft, ChevronRight, CalendarToday, KeyboardReturn,
 } from '@mui/icons-material';
 import { useFinance } from '../context/FinanceContext';
-import { MONTH_NAMES, fromMonthKey, toMonthKey } from '../db/schema';
+import { MONTH_NAMES, fromMonthKey, toMonthKey } from '../firebase/services';
 
 export default function MonthNavigator() {
   const {

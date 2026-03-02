@@ -1,21 +1,27 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { FinanceDB, HistoryDB, CategoryDB, ExpenseDB, getCurrentMonthKey, offsetMonth, fromMonthKey } from '../db/schema';
+import {
+  CategoryService, ExpenseService, MonthService, AuditService,
+  getCurrentMonthKey, offsetMonth, fromMonthKey,
+} from '../firebase/services';
 import { useAuth } from './AuthContext';
 
 const FinanceContext = createContext(null);
 
+const fmt = (n) =>
+  new Intl.NumberFormat('es-MX', { style:'currency', currency:'MXN', maximumFractionDigits:0 }).format(n);
+
 function calcularTotales(rows, income) {
   const editables = rows.filter((r) => r.editable);
-  const totales = { s1: 0, s2: 0, s3: 0, s4: 0 };
+  const totales = { s1:0, s2:0, s3:0, s4:0 };
   editables.forEach((r) => {
-    totales.s1 += Number(r.s1) || 0; totales.s2 += Number(r.s2) || 0;
-    totales.s3 += Number(r.s3) || 0; totales.s4 += Number(r.s4) || 0;
+    totales.s1 += Number(r.s1)||0; totales.s2 += Number(r.s2)||0;
+    totales.s3 += Number(r.s3)||0; totales.s4 += Number(r.s4)||0;
   });
   return rows.map((r) => {
     if (r.id === 'total')  return { ...r, ...totales };
     if (r.id === 'ahorro') {
-      const t = totales.s1 + totales.s2 + totales.s3 + totales.s4;
-      return { ...r, s1: income - t, s2: 0, s3: 0, s4: 0 };
+      const t = totales.s1+totales.s2+totales.s3+totales.s4;
+      return { ...r, s1: income-t, s2:0, s3:0, s4:0 };
     }
     return r;
   });
@@ -26,131 +32,204 @@ export function FinanceProvider({ children }) {
   const currentMonthKey = getCurrentMonthKey();
 
   const [activeMonthKey, setActiveMonthKey] = useState(currentMonthKey);
-  const [monthData,  setMonthData]  = useState(null);
-  const [history,    setHistory]    = useState([]);
-  const [categories, setCategories] = useState([]);
-  const [expenses,   setExpenses]   = useState([]);
-  const [tasaCambio, setTasaCambio] = useState(0.0572);
+  const [monthData,   setMonthData]   = useState(null);
+  const [history,     setHistory]     = useState([]);
+  const [categories,  setCategories]  = useState([]);
+  const [expenses,    setExpenses]    = useState([]);
+  const [tasaCambio,  setTasaCambio]  = useState(0.0572);
+  const [loading,     setLoading]     = useState(false);
 
-  // Reload everything when user or active month changes
-  const reload = useCallback(() => {
-    if (!user) { setMonthData(null); setHistory([]); setCategories([]); setExpenses([]); return; }
-    setMonthData({ ...FinanceDB.getMonth(user.uid, activeMonthKey) });
-    setHistory(HistoryDB.getAll(user.uid));
-    setCategories(CategoryDB.getAll(user.uid));
-    setExpenses(ExpenseDB.getByMonth(user.uid, activeMonthKey));
+  const audit = useCallback((action, opts) => {
+    if (!user) return;
+    AuditService.log(user.uid, action, {
+      email: user.email, userName: user.name,
+      monthKey: activeMonthKey, ...opts,
+    });
+  }, [user, activeMonthKey]);
+
+  const reload = useCallback(async () => {
+    if (!user) {
+      setMonthData(null); setHistory([]); setCategories([]); setExpenses([]);
+      return;
+    }
+    setLoading(true);
+    try {
+      const [cats, exps, hist] = await Promise.all([
+        CategoryService.getAll(user.uid),
+        ExpenseService.getByMonth(user.uid, activeMonthKey),
+        MonthService.getHistory(user.uid),
+      ]);
+      setCategories(cats);
+      setExpenses(exps);
+      setHistory(hist);
+
+      // El mes debe cargarse después de las categorías
+      const month = await MonthService.getOrCreate(
+        user.uid, activeMonthKey, cats, user.defaultIncome || 10000
+      );
+      setMonthData(month);
+    } catch (e) {
+      console.error('Error cargando datos:', e);
+    } finally {
+      setLoading(false);
+    }
   }, [user, activeMonthKey]);
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Month navigation
+  // Navegación de meses
   const goToMonth        = useCallback((key) => setActiveMonthKey(key), []);
   const goToPrevMonth    = useCallback(() => setActiveMonthKey((k) => offsetMonth(k, -1)), []);
   const goToNextMonth    = useCallback(() => setActiveMonthKey((k) => offsetMonth(k, +1)), []);
   const goToCurrentMonth = useCallback(() => setActiveMonthKey(currentMonthKey), [currentMonthKey]);
 
-  // Finance table cell edit (manual override)
-  const updateCell = useCallback((rowId, semana, valor) => {
+  // Editar celda (override manual de presupuesto)
+  const updateCell = useCallback(async (rowId, semana, valor) => {
     if (!user || !monthData) return;
-    const updated = FinanceDB.updateCell(user.uid, activeMonthKey, rowId, semana, valor);
-    setMonthData({ ...updated });
-  }, [user, activeMonthKey, monthData]);
+    const before = monthData.rows.find((r) => r.id === rowId)?.[semana];
+    const updatedRows = monthData.rows.map((r) =>
+      r.id === rowId ? { ...r, [semana]: Number(valor)||0 } : r
+    );
+    const updated = { ...monthData, rows: updatedRows };
+    setMonthData(updated);
+    await MonthService.save(user.uid, activeMonthKey, updated);
+    audit('FINANCE_CELL_EDIT', {
+      detail: `"${rowId}" ${semana.toUpperCase()}: ${fmt(before)} → ${fmt(valor)}`,
+      before: { [semana]: before }, after: { [semana]: valor },
+    });
+  }, [user, activeMonthKey, monthData, audit]);
 
-  const updateIngreso = useCallback((valor) => {
+  const updateIngreso = useCallback(async (valor) => {
     if (!user || !monthData) return;
-    const updated = FinanceDB.updateIncome(user.uid, activeMonthKey, valor);
-    setMonthData({ ...updated });
-  }, [user, activeMonthKey, monthData]);
+    const before = monthData.income;
+    const updated = await MonthService.updateIncome(user.uid, activeMonthKey, valor);
+    setMonthData(updated);
+    audit('FINANCE_INCOME_EDIT', {
+      detail: `Ingreso: ${fmt(before)} → ${fmt(valor)}`,
+      before: { income: before }, after: { income: valor },
+    });
+  }, [user, activeMonthKey, monthData, audit]);
 
-  const saveSnapshot = useCallback(() => {
+  const saveSnapshot = useCallback(async () => {
     if (!user) return;
-    FinanceDB.snapshotMonth(user.uid, activeMonthKey);
-    setHistory(HistoryDB.getAll(user.uid));
-  }, [user, activeMonthKey]);
+    await MonthService.snapshot(user.uid, activeMonthKey);
+    const hist = await MonthService.getHistory(user.uid);
+    setHistory(hist);
+    const { label } = fromMonthKey(activeMonthKey);
+    audit('FINANCE_SNAPSHOT', { detail: `Snapshot guardado para ${label}` });
+  }, [user, activeMonthKey, audit]);
 
-  // ── EXPENSE CRUD ──────────────────────────────────────────
-  const addExpense = useCallback((data) => {
+  // ── EXPENSES CRUD ─────────────────────────────────────────
+  const addExpense = useCallback(async (data) => {
     if (!user) return;
-    ExpenseDB.create(user.uid, activeMonthKey, data);
-    reload();
-  }, [user, activeMonthKey, reload]);
+    await ExpenseService.create(user.uid, activeMonthKey, data);
+    const cat = categories.find((c) => c.id === data.categoryId);
+    audit('EXPENSE_CREATE', {
+      detail: `${fmt(data.monto)} en "${cat?.nombre || data.categoryId}"${data.descripcion ? ` — "${data.descripcion}"` : ''}`,
+      after: data,
+    });
+    await reload();
+  }, [user, activeMonthKey, categories, audit, reload]);
 
-  const editExpense = useCallback((expenseId, updates) => {
+  const editExpense = useCallback(async (expenseId, updates) => {
     if (!user) return;
-    ExpenseDB.update(user.uid, activeMonthKey, expenseId, updates);
-    reload();
-  }, [user, activeMonthKey, reload]);
+    const before = expenses.find((e) => e.id === expenseId);
+    await ExpenseService.update(user.uid, activeMonthKey, expenseId, updates);
+    audit('EXPENSE_EDIT', {
+      detail: `Gasto editado: ${fmt(updates.monto || before?.monto)}`,
+      before, after: { ...before, ...updates },
+    });
+    await reload();
+  }, [user, activeMonthKey, expenses, audit, reload]);
 
-  const deleteExpense = useCallback((expenseId) => {
+  const deleteExpense = useCallback(async (expenseId) => {
     if (!user) return;
-    ExpenseDB.delete(user.uid, activeMonthKey, expenseId);
-    reload();
-  }, [user, activeMonthKey, reload]);
+    const target = expenses.find((e) => e.id === expenseId);
+    await ExpenseService.delete(user.uid, activeMonthKey, expenseId);
+    audit('EXPENSE_DELETE', {
+      detail: `Eliminado: ${fmt(target?.monto)} — "${target?.descripcion || target?.categoryId}"`,
+      before: target,
+    });
+    await reload();
+  }, [user, activeMonthKey, expenses, audit, reload]);
 
-  // ── CATEGORY CRUD ─────────────────────────────────────────
-  const addCategory = useCallback((data) => {
-    if (!user) return CategoryDB.create(user.uid, data);
-    const cat = CategoryDB.create(user.uid, data);
-    setCategories(CategoryDB.getAll(user.uid));
+  // ── CATEGORIES CRUD ───────────────────────────────────────
+  const addCategory = useCallback(async (data) => {
+    if (!user) return;
+    const cat = await CategoryService.create(user.uid, data);
+    audit('CATEGORY_CREATE', { detail: `Nueva: "${data.nombre}"`, after: cat });
+    const cats = await CategoryService.getAll(user.uid);
+    setCategories(cats);
     return cat;
-  }, [user]);
+  }, [user, audit]);
 
-  const updateCategory = useCallback((catId, updates) => {
+  const updateCategory = useCallback(async (catId, updates) => {
     if (!user) return;
-    CategoryDB.update(user.uid, catId, updates);
-    setCategories(CategoryDB.getAll(user.uid));
-    reload();
-  }, [user, reload]);
+    const before = categories.find((c) => c.id === catId);
+    await CategoryService.update(user.uid, catId, updates);
+    audit('CATEGORY_EDIT', {
+      detail: `"${before?.nombre}" actualizada`,
+      before, after: { ...before, ...updates },
+    });
+    const cats = await CategoryService.getAll(user.uid);
+    setCategories(cats);
+    await reload();
+  }, [user, categories, audit, reload]);
 
-  const deleteCategory = useCallback((catId) => {
+  const deleteCategory = useCallback(async (catId) => {
     if (!user) return;
-    const result = CategoryDB.delete(user.uid, catId, activeMonthKey);
-    setCategories(CategoryDB.getAll(user.uid));
-    reload();
+    const target     = categories.find((c) => c.id === catId);
+    const hasExpenses = expenses.some((e) => e.categoryId === catId);
+    const result     = await CategoryService.delete(user.uid, catId, hasExpenses);
+    audit('CATEGORY_DELETE', {
+      detail: `"${target?.nombre}" ${result.type === 'soft' ? 'desactivada' : 'eliminada'}`,
+      before: target,
+    });
+    const cats = await CategoryService.getAll(user.uid);
+    setCategories(cats);
+    await reload();
     return result;
-  }, [user, activeMonthKey, reload]);
+  }, [user, categories, expenses, audit, reload]);
 
-  const reactivateCategory = useCallback((catId) => {
+  const reactivateCategory = useCallback(async (catId) => {
     if (!user) return;
-    CategoryDB.reactivate(user.uid, catId);
-    setCategories(CategoryDB.getAll(user.uid));
-  }, [user]);
+    const target = categories.find((c) => c.id === catId);
+    await CategoryService.reactivate(user.uid, catId);
+    audit('CATEGORY_REACTIVATE', { detail: `"${target?.nombre}" reactivada` });
+    const cats = await CategoryService.getAll(user.uid);
+    setCategories(cats);
+  }, [user, categories, audit]);
 
   const updateTasaCambio = useCallback((tasa) => setTasaCambio(tasa), []);
 
-  // Derived values
+  // Derivados
   const rows = monthData
     ? calcularTotales([
         ...monthData.rows,
-        { id: 'total',  categoria: 'Total Gastos', s1:0, s2:0, s3:0, s4:0, editable: false, color: '#455a64' },
-        { id: 'ahorro', categoria: 'Ahorro',        s1:0, s2:0, s3:0, s4:0, editable: false, color: '#00897b' },
+        { id:'total',  categoria:'Total Gastos', s1:0,s2:0,s3:0,s4:0, editable:false, color:'#455a64' },
+        { id:'ahorro', categoria:'Ahorro',        s1:0,s2:0,s3:0,s4:0, editable:false, color:'#00897b' },
       ], monthData.income)
     : [];
 
-  const income     = monthData?.income || 0;
-  const totalMes   = rows.filter((r) => r.editable).reduce((a, r) => a + r.s1 + r.s2 + r.s3 + r.s4, 0);
-  const ahorroMes  = income - totalMes;
-  const pctGastos  = income > 0 ? ((totalMes / income) * 100).toFixed(1) : '0.0';
-  const carroRow   = monthData?.rows.find((r) => r.id === 'abono_carro');
-  const totalCarro = carroRow ? carroRow.s1 + carroRow.s2 + carroRow.s3 + carroRow.s4 : 0;
-  const pctCarro   = income > 0 ? ((totalCarro / income) * 100).toFixed(1) : '0.0';
-  const alertaCarro = income > 0 && totalCarro / income > (user?.prefs?.alertThreshold || 50) / 100;
+  const income      = monthData?.income || 0;
+  const totalMes    = rows.filter((r) => r.editable).reduce((a,r) => a+r.s1+r.s2+r.s3+r.s4, 0);
+  const ahorroMes   = income - totalMes;
+  const pctGastos   = income > 0 ? ((totalMes/income)*100).toFixed(1) : '0.0';
+  const carroRow    = monthData?.rows.find((r) => r.id === 'abono_carro');
+  const totalCarro  = carroRow ? carroRow.s1+carroRow.s2+carroRow.s3+carroRow.s4 : 0;
+  const pctCarro    = income > 0 ? ((totalCarro/income)*100).toFixed(1) : '0.0';
+  const alertaCarro = income > 0 && totalCarro/income > (user?.prefs?.alertThreshold||50)/100;
   const { label: activeMonthLabel } = fromMonthKey(activeMonthKey);
   const isCurrentMonth = activeMonthKey === currentMonthKey;
 
   return (
     <FinanceContext.Provider value={{
-      // Month
-      activeMonthKey, activeMonthLabel, currentMonthKey, isCurrentMonth, monthData,
+      activeMonthKey, activeMonthLabel, currentMonthKey, isCurrentMonth, monthData, loading,
       goToMonth, goToPrevMonth, goToNextMonth, goToCurrentMonth,
-      // Finance
       rows, ingreso: income, totalMes, ahorroMes, pctGastos, pctCarro, alertaCarro, tasaCambio,
       updateCell, updateIngreso, updateTasaCambio, saveSnapshot,
-      // History
       history,
-      // Expenses
       expenses, addExpense, editExpense, deleteExpense,
-      // Categories
       categories, addCategory, updateCategory, deleteCategory, reactivateCategory,
     }}>
       {children}

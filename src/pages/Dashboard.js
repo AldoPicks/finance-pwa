@@ -8,7 +8,7 @@ import {
   AccountBalance, Logout, TrendingUp, TrendingDown, Savings, Warning,
   SwapHoriz, Dashboard as DashboardIcon, History, Person, Menu as MenuIcon,
   SaveAlt, CheckCircle, ReceiptLong, Category as CategoryIcon,
-  CreditCard, DarkMode, LightMode,
+  CreditCard, DarkMode, LightMode, ManageSearch,
 } from '@mui/icons-material';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -25,6 +25,7 @@ import UserProfile from './UserProfile';
 import CategoriesPage from './CategoriesPage';
 import ExpensesPage from './ExpensesPage';
 import CardsPage from './CardsPage';
+import LogsPage from './LogsPage';
 
 const DRAWER_W = 240;
 
@@ -34,6 +35,7 @@ const NAV_ITEMS = [
   { label: 'Tarjetas',   icon: <CreditCard fontSize="small" />,    path: '/cards' },
   { label: 'Categorías', icon: <CategoryIcon fontSize="small" />,  path: '/categories' },
   { label: 'Historial',  icon: <History fontSize="small" />,       path: '/history' },
+  { label: 'Auditoría',  icon: <ManageSearch fontSize="small" />,  path: '/logs' },
 ];
 
 // ─── Sidebar ─────────────────────────────────────────────────
@@ -265,6 +267,7 @@ export default function Dashboard() {
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/history"    element={<HistoryPage />} />
             <Route path="/profile"    element={<UserProfile />} />
+            <Route path="/logs"       element={<LogsPage />} />
           </Routes>
         </Box>
       </Box>

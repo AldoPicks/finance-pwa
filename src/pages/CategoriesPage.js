@@ -8,7 +8,7 @@ import {
   Add, Edit, Delete, RestoreFromTrash, Category as CategoryIcon,
 } from '@mui/icons-material';
 import { useFinance } from '../context/FinanceContext';
-import { COLOR_OPTIONS, ICON_OPTIONS } from '../db/schema';
+import { COLOR_OPTIONS, ICON_OPTIONS } from '../firebase/services';
 
 // ── Diálogo crear/editar categoría ───────────────────────────
 function CategoryDialog({ open, onClose, initial }) {
