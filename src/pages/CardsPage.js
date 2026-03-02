@@ -135,8 +135,13 @@ function CardDialog({ open, onClose, initial }) {
     if (!form.diaPago || Number(form.diaPago) < 1 || Number(form.diaPago) > 31) { setError('El día de pago debe ser entre 1 y 31'); return; }
     setSaving(true);
     try {
-      await CardDB.update(user.uid, initial.id, form); AuditService.log(user.uid, "CARD_EDIT", { uid: user.uid, email: user.email, userName: user.name, detail: `Tarjeta "${form.nombre}" editada`, before: initial, after: form });
-      else await CardDB.create(user.uid, form); AuditService.log(user.uid, "CARD_CREATE", { uid: user.uid, email: user.email, userName: user.name, detail: `Tarjeta "${form.nombre}" (${form.banco}) agregada`, after: form });
+      if (isEdit) {
+        await CardDB.update(user.uid, initial.id, form);
+        AuditService.log(user.uid, "CARD_EDIT", { uid: user.uid, email: user.email, userName: user.name, detail: `Tarjeta "${form.nombre}" editada`, before: initial, after: form });
+      } else {
+        await CardDB.create(user.uid, form);
+        AuditService.log(user.uid, "CARD_CREATE", { uid: user.uid, email: user.email, userName: user.name, detail: `Tarjeta "${form.nombre}" (${form.banco}) agregada`, after: form });
+      }
       onClose(true);
     } catch (e) {
       setError(e.message);
@@ -299,7 +304,7 @@ function PaymentDialog({ open, onClose, card }) {
     setError('');
   }, [open, card]);
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.monto || Number(form.monto) <= 0) { setError('El monto es obligatorio'); return; }
     try {
       await CardDB.addPayment(user.uid, card.id, form);
@@ -370,7 +375,7 @@ export default function CardsPage() {
     setPayCard(null);
     if (saved) { loadCards(); showToast('✅ Pago registrado'); checkCardPayments(); }
   };
-  const handleDelete = () => {
+  const handleDelete = async () => {
     await CardDB.delete(user.uid, confirmDel.id);
     setConfirmDel(null); loadCards(); showToast('🗑️ Tarjeta eliminada');
   };
