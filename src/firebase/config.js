@@ -33,33 +33,47 @@ const firebaseConfig = {
   appId:             process.env.REACT_APP_FIREBASE_APP_ID,
 };
 
-// Validar que las variables estén configuradas
-const missingVars = Object.entries(firebaseConfig)
-  .filter(([, v]) => !v)
-  .map(([k]) => k);
-
-if (missingVars.length > 0) {
-  console.error(
-    '❌ Firebase: faltan variables de entorno:\n' +
-    missingVars.map((k) => `  REACT_APP_${k.toUpperCase()}`).join('\n') +
-    '\n\nCrea un archivo .env.local con tus credenciales de Firebase.'
+// Validación mejorada: verificar que la config sea válida
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  throw new Error(
+    '❌ Firebase configuration is missing required variables.\n' +
+    'Create a .env.local file in the project root with:\n' +
+    'REACT_APP_FIREBASE_API_KEY=...\n' +
+    'REACT_APP_FIREBASE_AUTH_DOMAIN=...\n' +
+    'REACT_APP_FIREBASE_PROJECT_ID=...\n' +
+    'REACT_APP_FIREBASE_STORAGE_BUCKET=...\n' +
+    'REACT_APP_FIREBASE_MESSAGING_SENDER_ID=...\n' +
+    'REACT_APP_FIREBASE_APP_ID=...'
   );
 }
 
-const app  = initializeApp(firebaseConfig);
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+  console.log('✅ Firebase initialized successfully');
+} catch (error) {
+  console.error('❌ Firebase initialization error:', error);
+  throw error;
+}
 export const auth = getAuth(app);
 export const db   = getFirestore(app);
 
-// Persistencia offline: los datos están disponibles sin internet
-// y se sincronizan automáticamente al reconectarse
-enableIndexedDbPersistence(db).catch((err) => {
-  if (err.code === 'failed-precondition') {
-    // Múltiples pestañas abiertas — solo funciona en una a la vez
-    console.warn('Firebase offline: múltiples pestañas detectadas');
-  } else if (err.code === 'unimplemented') {
-    // Navegador no soporta persistencia offline
-    console.warn('Firebase offline: navegador no soportado');
+// Enable offline persistence for Firestore (data cached locally)
+// Wrapped in async initialization to prevent blocking
+(async () => {
+  try {
+    await enableIndexedDbPersistence(db);
+    console.log('✅ Firestore offline persistence enabled');
+  } catch (err) {
+    // Silently handle common errors — app continues without persistence
+    if (err.code === 'failed-precondition') {
+      console.warn('⚠️ Multiple tabs open — Firestore persistence disabled.');
+    } else if (err.code === 'unimplemented') {
+      console.warn('⚠️ Browser does not support Firestore persistence.');
+    } else {
+      console.warn('⚠️ Firestore offline persistence unavailable:', err.message);
+    }
   }
-});
+})();
 
 export default app;
