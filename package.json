@@ -29,7 +29,7 @@
     "gh-pages": "^6.0.0",
     "yaml": "^2.8.2"
   },
-  "homepage": ".",
+  "homepage": "https://aldopicks.github.io/finance-pwa",
   "eslintConfig": {
     "extends": [
       "react-app"

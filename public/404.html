@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Page not found</title>
+    <!-- GitHub Pages will serve this file when it can't find a route. The script below
+         redirects the user back to the SPA's index.html while preserving the
+         requested path in the hash so React Router (with basename) can handle it. -->
+    <script>
+      (function () {
+        var path = window.location.pathname;
+        // strip off possible repo name (basename) so we don't duplicate it
+        var base = '/finance-pwa';
+        if (path.indexOf(base) === 0) {
+          path = path.substr(base.length);
+        }
+        var target = base + '/#' + path + window.location.search + window.location.hash;
+        window.location.replace(target);
+      })();
+    </script>
+  </head>
+  <body>
+    <p>Redirecting to <a href="/finance-pwa/">/finance-pwa/</a></p>
+  </body>
+</html>

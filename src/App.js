@@ -40,7 +40,8 @@ export default function App() {
       {(theme) => (
         <ThemeProvider theme={theme}>
           <CssBaseline />
-          <BrowserRouter>
+          {/* tell the router about our GitHub Pages/Firebase base path */}
+          <BrowserRouter basename="/finance-pwa">
             <AuthProvider>
               <AppInner />
             </AuthProvider>
