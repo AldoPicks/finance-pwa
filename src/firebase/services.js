@@ -377,13 +377,29 @@ export const MonthService = {
 
 export const CardService = {
   async getAll(uid) {
-    const q = query(
-      collection(db, 'users', uid, 'cards'),
-      where('activa', '==', true),
-      orderBy('createdAt', 'asc')
-    );
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    // The query below uses a `where` + `orderBy` combo, which in Firestore
+    // requires a composite index. When the index is missing the call will
+    // reject with a failed-precondition error and the page ends up with an
+    // empty array (cards.length stays at 0 even though the documents exist).
+    //
+    // We try the indexed query first; if it fails we fall back to a simple
+    // grab‑everything query and filter/sort client‑side so the UI still works.
+    try {
+      const q = query(
+        collection(db, 'users', uid, 'cards'),
+        where('activa', '==', true),
+        orderBy('createdAt', 'asc')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      console.warn('CardService.getAll index query failed, falling back:', e);
+      const snap = await getDocs(collection(db, 'users', uid, 'cards'));
+      return snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((c) => c.activa)
+        .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+    }
   },
 
   async create(uid, data) {

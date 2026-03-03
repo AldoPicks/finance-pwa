@@ -203,9 +203,22 @@ export function FinanceProvider({ children }) {
   const updateTasaCambio = useCallback((tasa) => setTasaCambio(tasa), []);
 
   // Derivados
+  // Merge the category color from the live `categories` state into the
+  // stored month rows. The reason is that rows are snapshots taken when the
+  // month document was created, so if the user edits the category color later
+  // the row would still keep the old colour. We override here on every
+  // calculation so the dashboard (and charts) always show the current color.
   const rows = monthData
     ? calcularTotales([
-        ...monthData.rows,
+        ...monthData.rows.map((r) => {
+          if (r.editable) {
+            const cat = categories.find((c) => c.id === r.id);
+            if (cat && cat.color && cat.color !== r.color) {
+              return { ...r, color: cat.color };
+            }
+          }
+          return r;
+        }),
         { id:'total',  categoria:'Total Gastos', s1:0,s2:0,s3:0,s4:0, editable:false, color:'#455a64' },
         { id:'ahorro', categoria:'Ahorro',        s1:0,s2:0,s3:0,s4:0, editable:false, color:'#00897b' },
       ], monthData.income)

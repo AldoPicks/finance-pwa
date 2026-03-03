@@ -4,12 +4,14 @@ import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { useFinance } from '../context/FinanceContext';
 import { useThemeMode } from '../context/ThemeContext';
 import { Box, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
 export default function PieChart() {
   const { rows } = useFinance();
   const { isDark } = useThemeMode();
+  const theme = useTheme();
 
   const editables = rows.filter((r) => r.editable);
   const labels    = editables.map((r) => r.categoria);
@@ -19,9 +21,11 @@ export default function PieChart() {
   const colors = editables.map((r) => r.color);
   const total  = values.reduce((a, b) => a + b, 0);
 
-  const legendColor  = isDark ? '#ffffff' : '#1a1a2e';
-  const tooltipBg    = isDark ? 'rgba(15,32,64,0.97)' : 'rgba(255,255,255,0.97)';
-  const tooltipText  = isDark ? '#e8f4fd' : '#0d1b2a';
+  // Use the MUI theme palette to pick appropriate text colors; this ensures
+  // the legend/tooltip always match the app's light/dark settings.
+  const legendColor   = theme.palette.text.primary;
+  const tooltipBg     = isDark ? 'rgba(15,32,64,0.97)' : 'rgba(255,255,255,0.97)';
+  const tooltipText   = theme.palette.text.primary;
   const tooltipBorder = isDark ? 'rgba(79,195,247,0.4)' : 'rgba(79,195,247,0.5)';
 
   if (total === 0) {
