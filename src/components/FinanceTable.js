@@ -3,7 +3,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Box, Typography, InputAdornment, Tooltip, Chip, Button,
 } from '@mui/material';
-import { Edit, Lock, Add } from '@mui/icons-material';
+import { Edit, Lock, Add, CreditCard } from '@mui/icons-material';
 import { useFinance } from '../context/FinanceContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -52,8 +52,8 @@ function EditableCell({ value, rowId, semana, editable }) {
   );
 }
 
-export default function FinanceTable() {
-  const { rows, ingreso, incomes, ingresosBySemana, updateIngreso } = useFinance();
+export default function FinanceTable({ readOnly = false }) {
+  const { rows, ingreso, incomes, ingresosBySemana, updateIngreso, cards, cardsCargos, hayCargosTarjetas } = useFinance();
   const navigate = useNavigate();
   const [editingIngreso, setEditingIngreso] = useState(false);
   const [localIngreso,   setLocalIngreso]   = useState(ingreso);
@@ -98,6 +98,10 @@ export default function FinanceTable() {
               onClick={() => navigate('/incomes')}
               sx={{ fontFamily: 'DM Mono', fontSize: '0.7rem', cursor: 'pointer', bgcolor: 'rgba(79,195,247,0.08)', color: '#4fc3f7', '&:hover': { bgcolor: 'rgba(79,195,247,0.15)' } }} />
           </Box>
+        ) : readOnly ? (
+          <Chip label={`${fmt(ingreso)} MXN`}
+            sx={{ fontFamily: 'DM Mono', fontWeight: 500, bgcolor: 'rgba(79,195,247,0.1)', color: '#4fc3f7', border: '1px solid rgba(79,195,247,0.3)' }}
+          />
         ) : (
           editingIngreso ? (
             <TextField autoFocus size="small" value={localIngreso}
@@ -177,7 +181,15 @@ export default function FinanceTable() {
                       {!row.editable && <Lock sx={{ fontSize: 11, color: 'text.disabled' }} />}
                     </Box>
                   </TableCell>
-                  {SEMANAS.map((s) => <EditableCell key={s} rowId={row.id} semana={s} value={row[s]} editable={row.editable} />)}
+                  {SEMANAS.map((s) => (
+                    <EditableCell
+                      key={s}
+                      rowId={row.id}
+                      semana={s}
+                      value={row[s]}
+                      editable={readOnly ? false : row.editable}
+                    />
+                  ))}
                   <TableCell align="right">
                     <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', fontWeight: isSpecial ? 700 : 400, color: row.id === 'total' ? '#4fc3f7' : 'text.primary' }}>
                       {fmt(totalRow)}
@@ -191,6 +203,43 @@ export default function FinanceTable() {
                 </TableRow>
               );
             })}
+
+            {/* Fila tarjetas de crédito (automática) */}
+            {hayCargosTarjetas && (() => {
+              const totalTarjetas = Object.values(cardsCargos).reduce((a, b) => a + b, 0);
+              const pct = ingreso > 0 ? ((totalTarjetas / ingreso) * 100).toFixed(1) : '0.0';
+              return (
+                <TableRow sx={{ bgcolor: 'rgba(229,57,53,0.04)', '& td': { borderBottom: '1px solid rgba(229,57,53,0.1)' } }}>
+                  <TableCell>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: '#ef5350', flexShrink: 0 }} />
+                      <CreditCard sx={{ fontSize: 14, color: '#ef5350' }} />
+                      <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', color: '#ef5350' }}>
+                        Tarjetas de crédito
+                      </Typography>
+                      <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'DM Mono', fontSize: '0.63rem' }}>
+                        ({cards.length} tarjeta{cards.length !== 1 ? 's' : ''})
+                      </Typography>
+                    </Box>
+                  </TableCell>
+                  {['s1','s2','s3','s4'].map((s) => (
+                    <TableCell key={s} align="right">
+                      <Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', color: cardsCargos[s] > 0 ? '#ef5350' : 'text.disabled' }}>
+                        {cardsCargos[s] > 0 ? fmt(cardsCargos[s]) : '—'}
+                      </Typography>
+                    </TableCell>
+                  ))}
+                  <TableCell align="right">
+                    <Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', fontWeight: 700, color: '#ef5350' }}>
+                      {fmt(totalTarjetas)}
+                    </Typography>
+                  </TableCell>
+                  <TableCell align="right">
+                    <Chip label={`${pct}%`} size="small" sx={{ fontFamily: 'DM Mono', fontSize: '0.68rem', height: 20, bgcolor: 'rgba(229,57,53,0.12)', color: '#ef5350' }} />
+                  </TableCell>
+                </TableRow>
+              );
+            })()}
 
             {/* Divisor */}
             <TableRow><TableCell colSpan={7} sx={{ py: 0.3, borderBottom: '1px solid rgba(79,195,247,0.15)' }} /></TableRow>

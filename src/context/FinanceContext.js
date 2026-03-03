@@ -1,9 +1,58 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   CategoryService, ExpenseService, MonthService, IncomeService, AuditService,
+  CardService,
   getCurrentMonthKey, offsetMonth, fromMonthKey,
 } from '../firebase/services';
+
 import { useAuth } from './AuthContext';
+// ── Helpers tarjetas ──────────────────────────────────────────
+
+/** día 1-7 → s1, 8-14 → s2, 15-21 → s3, 22+ → s4 */
+function diaToSemana(dia) {
+  if (dia <= 7)  return 's1';
+  if (dia <= 14) return 's2';
+  if (dia <= 21) return 's3';
+  return 's4';
+}
+
+/** Primer mes de cobro de una compra, dado el diaCorte de la tarjeta */
+function primerMesCobroCard(fechaStr, diaCorte) {
+  const d         = new Date(fechaStr + 'T12:00:00');
+  const diaCompra = d.getDate();
+  const mes       = d.getMonth();
+  const anio      = d.getFullYear();
+  const mesCierre = diaCompra <= diaCorte ? mes : mes + 1;
+  return new Date(anio, mesCierre + 1, 1);
+}
+
+/**
+ * Dado un array de tarjetas y un monthKey (YYYY-MM), retorna
+ * { s1, s2, s3, s4 } con el total MSI que vence en ese mes.
+ * El cargo va a la semana del diaPago de cada tarjeta.
+ */
+function calcularCargosTargetasPorSemana(cards, monthKey) {
+  const [ty, tm]  = monthKey.split('-').map(Number);
+  const targetIdx = ty * 12 + (tm - 1);
+  const tot       = { s1: 0, s2: 0, s3: 0, s4: 0 };
+
+  cards.forEach((card) => {
+    const diaCorte = Number(card.diaCorte) || 25;
+    const semana   = diaToSemana(Number(card.diaPago) || 1);
+
+    (card.compras || []).forEach((compra) => {
+      const meses    = Number(compra.meses) || 1;
+      const inicio   = primerMesCobroCard(compra.fecha, diaCorte);
+      const startIdx = inicio.getFullYear() * 12 + inicio.getMonth();
+      if (targetIdx >= startIdx && targetIdx < startIdx + meses) {
+        tot[semana] += compra.monto / meses;
+      }
+    });
+  });
+
+  Object.keys(tot).forEach((k) => { tot[k] = Math.round(tot[k] * 100) / 100; });
+  return tot;
+}
 
 const FinanceContext = createContext(null);
 
@@ -37,6 +86,7 @@ export function FinanceProvider({ children }) {
   const [categories,  setCategories]  = useState([]);
   const [expenses,    setExpenses]    = useState([]);
   const [incomes,     setIncomes]     = useState([]);   // ← NUEVO
+  const [cards,       setCards]       = useState([]);
   const [tasaCambio,  setTasaCambio]  = useState(0.0572);
   const [loading,     setLoading]     = useState(false);
 
@@ -51,21 +101,23 @@ export function FinanceProvider({ children }) {
   const reload = useCallback(async () => {
     if (!user) {
       setMonthData(null); setHistory([]); setCategories([]);
-      setExpenses([]); setIncomes([]);
+      setExpenses([]); setIncomes([]); setCards([]);
       return;
     }
     setLoading(true);
     try {
-      const [cats, exps, incs, hist] = await Promise.all([
+      const [cats, exps, incs, hist, cds] = await Promise.all([
         CategoryService.getAll(user.uid),
         ExpenseService.getByMonth(user.uid, activeMonthKey),
         IncomeService.getByMonth(user.uid, activeMonthKey),
         MonthService.getHistory(user.uid),
+        CardService.getAll(user.uid),
       ]);
       setCategories(cats);
       setExpenses(exps);
       setIncomes(incs);
       setHistory(hist);
+      setCards(cds);
 
       const month = await MonthService.getOrCreate(
         user.uid, activeMonthKey, cats, user.defaultIncome || 10000
@@ -254,6 +306,10 @@ export function FinanceProvider({ children }) {
   // Ingresos por semana (para la fila de ingresos en la tabla)
   const ingresosBySemana = IncomeService.bySemana(incomes);
 
+  // Cargos automáticos de tarjetas para el mes activo
+  const cardsCargos = calcularCargosTargetasPorSemana(cards, activeMonthKey);
+  const hayCargosTarjetas = Object.values(cardsCargos).some((v) => v > 0);
+
   const rows = monthData
     ? calcularTotales([
         ...monthData.rows.map((r) => {
@@ -290,6 +346,8 @@ export function FinanceProvider({ children }) {
       history,
       // Ingresos variables
       incomes, ingresosBySemana, addIncome, editIncome, deleteIncome,
+      // Tarjetas
+      cards, cardsCargos, hayCargosTarjetas,
       // Gastos
       expenses, addExpense, editExpense, deleteExpense,
       // Categorías

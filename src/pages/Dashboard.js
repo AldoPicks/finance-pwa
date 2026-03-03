@@ -205,9 +205,8 @@ function DashboardHome() {
       <Paper sx={{ p: { xs: 1.5, md: 2.5 } }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
           <Typography variant="h6" sx={{ fontSize: '0.92rem' }}>Tabla de gastos — {activeMonthLabel}</Typography>
-          <Typography variant="caption" sx={{ color: 'text.secondary' }}>Haz clic en una celda para editar</Typography>
         </Box>
-        <FinanceTable />
+        <FinanceTable readOnly />
       </Paper>
 
       <Snackbar open={alertaCarro && !alertaDismissed} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} onClose={() => setAlertaDismissed(true)} autoHideDuration={8000}>
