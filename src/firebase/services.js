@@ -6,7 +6,7 @@
 //  users/{uid}/categories/{catId}       ← categorías propias
 //  users/{uid}/months/{monthKey}        ← datos financieros mensuales
 //  users/{uid}/expenses/{expenseId}     ← gastos individuales
-//  users/{uid}/incomes/{incomeId}       ← ingresos variables ← NUEVO
+//  users/{uid}/incomes/{incomeId}       ← ingresos variables
 //  users/{uid}/cards/{cardId}           ← tarjetas de crédito
 //  users/{uid}/history/{monthKey}       ← snapshots del historial
 //  users/{uid}/audit/{logId}            ← logs de auditoría
@@ -16,7 +16,7 @@
 import {
   doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   collection, query, where, orderBy, limit,
-  addDoc, writeBatch,
+  addDoc, writeBatch, arrayUnion, increment,
 } from 'firebase/firestore';
 import { db } from './config';
 
@@ -57,7 +57,7 @@ function clean(obj) {
   );
 }
 
-// ─── CATEGORÍAS DEFAULT ───────────────────────────────────────
+// ─── CONSTANTES ──────────────────────────────────────────────
 
 export const DEFAULT_CATEGORIES = [
   { id:'gastos_semanales', nombre:'Gastos semanales',     color:'#1e88e5', icono:'🛒', activa:true },
@@ -89,7 +89,6 @@ export const ICON_OPTIONS = [
 export const CARD_COLORS   = ['#1a237e','#0d47a1','#006064','#1b5e20','#4a148c','#b71c1c','#e65100','#212121','#37474f','#880e4f'];
 export const CARD_NETWORKS = ['visa','mastercard','amex','carnet'];
 
-// Tipos de ingreso extra
 export const INCOME_TYPES = [
   { id:'salario',    label:'Salario / Nómina',   icono:'💼', color:'#4fc3f7' },
   { id:'freelance',  label:'Freelance',           icono:'💻', color:'#69f0ae' },
@@ -188,17 +187,9 @@ export const CategoryService = {
   },
 };
 
-// ─── INCOME SERVICE (ingresos variables) ─────────────────────
-//
-//  Cada IncomeEntry representa un pago recibido:
-//  { id, uid, monthKey, semana, monto, descripcion, tipo, fecha, createdAt }
-//
-//  El ingreso total del mes = suma de todos los IncomeEntry del mes.
-//  Esto reemplaza el campo income fijo del documento de mes.
-//  Para retrocompatibilidad, si no hay IncomeEntries se usa month.income.
+// ─── INCOME SERVICE ───────────────────────────────────────────
 
 export const IncomeService = {
-  /** Obtener todos los ingresos de un mes */
   async getByMonth(uid, monthKey) {
     const q = query(
       collection(db, 'users', uid, 'incomes'),
@@ -209,7 +200,6 @@ export const IncomeService = {
       const snap = await getDocs(q);
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     } catch {
-      // Fallback sin orderBy si falta el índice
       const snap = await getDocs(
         query(collection(db, 'users', uid, 'incomes'), where('monthKey', '==', monthKey))
       );
@@ -219,7 +209,6 @@ export const IncomeService = {
     }
   },
 
-  /** Registrar un ingreso */
   async create(uid, monthKey, { monto, descripcion, tipo, fecha }) {
     const semana = dateToWeek(fecha);
     const data = {
@@ -231,12 +220,10 @@ export const IncomeService = {
       createdAt:   new Date().toISOString(),
     };
     const ref = await addDoc(collection(db, 'users', uid, 'incomes'), data);
-    // Sincronizar el campo income del mes con la nueva suma total
     await IncomeService.syncMonthIncome(uid, monthKey);
     return { id: ref.id, ...data };
   },
 
-  /** Actualizar un ingreso */
   async update(uid, monthKey, incomeId, updates) {
     if (updates.fecha) updates.semana = dateToWeek(updates.fecha);
     await updateDoc(
@@ -246,13 +233,11 @@ export const IncomeService = {
     await IncomeService.syncMonthIncome(uid, monthKey);
   },
 
-  /** Eliminar un ingreso */
   async delete(uid, monthKey, incomeId) {
     await deleteDoc(doc(db, 'users', uid, 'incomes', incomeId));
     await IncomeService.syncMonthIncome(uid, monthKey);
   },
 
-  /** Recalcular y guardar el income total del mes en el documento del mes */
   async syncMonthIncome(uid, monthKey) {
     const incomes = await IncomeService.getByMonth(uid, monthKey);
     const total   = incomes.reduce((a, i) => a + (Number(i.monto) || 0), 0);
@@ -264,12 +249,10 @@ export const IncomeService = {
     return total;
   },
 
-  /** Suma total de ingresos de un mes */
   totalFromList(incomes) {
     return incomes.reduce((a, i) => a + (Number(i.monto) || 0), 0);
   },
 
-  /** Ingresos agrupados por semana { s1, s2, s3, s4 } */
   bySemana(incomes) {
     return incomes.reduce((acc, i) => {
       const key = `s${i.semana}`;
@@ -440,90 +423,6 @@ export const MonthService = {
   },
 };
 
-// ─── CARD SERVICE ─────────────────────────────────────────────
-
-export const CardService = {
-  async getAll(uid) {
-    try {
-      const q = query(
-        collection(db, 'users', uid, 'cards'),
-        where('activa', '==', true),
-        orderBy('createdAt', 'asc')
-      );
-      const snap = await getDocs(q);
-      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    } catch (e) {
-      console.warn('CardService.getAll fallback:', e);
-      const snap = await getDocs(collection(db, 'users', uid, 'cards'));
-      return snap.docs
-        .map((d) => ({ id: d.id, ...d.data() }))
-        .filter((c) => c.activa)
-        .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
-    }
-  },
-
-  async create(uid, data) {
-    const now = new Date().toISOString();
-    const card = {
-      uid,
-      nombre:      data.nombre?.trim() || 'Mi tarjeta',
-      banco:       data.banco?.trim() || '',
-      ultimos4:    data.ultimos4 || '',
-      color:       data.color || CARD_COLORS[0],
-      red:         data.red || 'visa',
-      limiteTotal: Number(data.limiteTotal) || 0,
-      saldoActual: Number(data.saldoActual) || 0,
-      minimoMes:   Number(data.minimoMes) || 0,
-      diaPago:     Number(data.diaPago) || 1,
-      diaCorte:    Number(data.diaCorte) || 25,
-      tasa:        data.tasa || '0',
-      notas:       data.notas || '',
-      activa:      true,
-      pagos:       [],
-      createdAt:   now,
-      updatedAt:   now,
-    };
-    const ref = await addDoc(collection(db, 'users', uid, 'cards'), card);
-    return { id: ref.id, ...card };
-  },
-
-  async update(uid, cardId, updates) {
-    await updateDoc(
-      doc(db, 'users', uid, 'cards', cardId),
-      { ...clean(updates), updatedAt: new Date().toISOString() }
-    );
-  },
-
-  async delete(uid, cardId) {
-    await updateDoc(doc(db, 'users', uid, 'cards', cardId), { activa: false, updatedAt: new Date().toISOString() });
-  },
-
-  async addPayment(uid, cardId, { monto, tipo, nota }) {
-    const ref  = doc(db, 'users', uid, 'cards', cardId);
-    const snap = await getDoc(ref);
-    if (!snap.exists()) throw new Error('Tarjeta no encontrada');
-    const card    = snap.data();
-    const payment = {
-      id:    'pay_' + Date.now().toString(36),
-      monto: Number(monto) || 0,
-      fecha: new Date().toISOString().split('T')[0],
-      tipo:  tipo || 'parcial',
-      nota:  nota?.trim() || '',
-    };
-    const pagos       = [payment, ...(card.pagos || [])];
-    const saldoActual = Math.max(0, card.saldoActual - payment.monto);
-    await updateDoc(ref, { pagos, saldoActual, updatedAt: new Date().toISOString() });
-    return { ...card, id: cardId, pagos, saldoActual };
-  },
-
-  daysUntilPayment(card) {
-    const today = new Date(); today.setHours(0,0,0,0);
-    let payDate = new Date(today.getFullYear(), today.getMonth(), card.diaPago);
-    if (payDate < today) payDate.setMonth(payDate.getMonth()+1);
-    return Math.ceil((payDate - today)/(1000*60*60*24));
-  },
-};
-
 // ─── AUDIT SERVICE ────────────────────────────────────────────
 
 export const AuditService = {
@@ -628,4 +527,111 @@ export const AUDIT_ACTIONS = {
   PROFILE_UPDATE:       { label:'Perfil actualizado',       icon:'👤', module:'Perfil',     severity:'info'    },
   PROFILE_THEME:        { label:'Tema cambiado',            icon:'🎨', module:'Perfil',     severity:'info'    },
   SYSTEM_ERROR:         { label:'Error del sistema',        icon:'💥', module:'Sistema',    severity:'error'   },
+};
+
+// ─── CARD SERVICE ─────────────────────────────────────────────
+
+export const CardService = {
+  async getAll(uid) {
+    try {
+      const q = query(
+        collection(db, 'users', uid, 'cards'),
+        where('activa', '==', true),
+        orderBy('createdAt', 'asc')
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch (e) {
+      console.warn('CardService.getAll fallback:', e);
+      const snap = await getDocs(collection(db, 'users', uid, 'cards'));
+      return snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((c) => c.activa)
+        .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+    }
+  },
+
+  async create(uid, data) {
+    const now = new Date().toISOString();
+    const card = {
+      uid,
+      nombre:      data.nombre?.trim() || 'Mi tarjeta',
+      banco:       data.banco?.trim() || '',
+      ultimos4:    data.ultimos4 || '',
+      color:       data.color || CARD_COLORS[0],
+      red:         data.red || 'visa',
+      limiteTotal: Number(data.limiteTotal) || 0,
+      saldoActual: Number(data.saldoActual) || 0,
+      minimoMes:   Number(data.minimoMes) || 0,
+      diaPago:     Number(data.diaPago) || 1,
+      diaCorte:    Number(data.diaCorte) || 25,
+      tasa:        data.tasa || '0',
+      notas:       data.notas || '',
+      activa:      true,
+      pagos:       [],
+      compras:     [],  // ← array para compras
+      createdAt:   now,
+      updatedAt:   now,
+    };
+    const ref = await addDoc(collection(db, 'users', uid, 'cards'), card);
+    return { id: ref.id, ...card };
+  },
+
+  async update(uid, cardId, updates) {
+    await updateDoc(
+      doc(db, 'users', uid, 'cards', cardId),
+      { ...clean(updates), updatedAt: new Date().toISOString() }
+    );
+  },
+
+  async delete(uid, cardId) {
+    await updateDoc(doc(db, 'users', uid, 'cards', cardId), { activa: false, updatedAt: new Date().toISOString() });
+  },
+
+  async addPayment(uid, cardId, { monto, tipo, nota }) {
+    const ref  = doc(db, 'users', uid, 'cards', cardId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Tarjeta no encontrada');
+    const card    = snap.data();
+    const payment = {
+      id:    'pay_' + Date.now().toString(36),
+      monto: Number(monto) || 0,
+      fecha: new Date().toISOString().split('T')[0],
+      tipo:  tipo || 'parcial',
+      nota:  nota?.trim() || '',
+    };
+    const pagos       = [payment, ...(card.pagos || [])];
+    const saldoActual = Math.max(0, card.saldoActual - payment.monto);
+    await updateDoc(ref, { pagos, saldoActual, updatedAt: new Date().toISOString() });
+    return { ...card, id: cardId, pagos, saldoActual };
+  },
+
+  async addPurchase(uid, cardId, purchaseData) {
+    const now = new Date().toISOString();
+    const compra = {
+      id:          'compra_' + Date.now().toString(36),
+      monto:       Number(purchaseData.monto) || 0,
+      fecha:       purchaseData.fecha || now.split('T')[0],
+      descripcion: (purchaseData.descripcion || '').trim(),
+      meses:       Number(purchaseData.meses) || 1,
+      nota:        (purchaseData.nota || '').trim(),
+      createdAt:   now,
+    };
+
+    const ref = doc(db, 'users', uid, 'cards', cardId);
+    await updateDoc(ref, {
+      compras: arrayUnion(compra),
+      saldoActual: increment(compra.monto),
+      updatedAt: now,
+    });
+
+    return compra;
+  },
+
+  daysUntilPayment(card) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    let payDate = new Date(today.getFullYear(), today.getMonth(), card.diaPago);
+    if (payDate < today) payDate.setMonth(payDate.getMonth()+1);
+    return Math.ceil((payDate - today)/(1000*60*60*24));
+  },
 };
