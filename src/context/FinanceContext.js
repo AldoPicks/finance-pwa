@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
-  CategoryService, ExpenseService, MonthService, AuditService,
+  CategoryService, ExpenseService, MonthService, IncomeService, AuditService,
   getCurrentMonthKey, offsetMonth, fromMonthKey,
 } from '../firebase/services';
 import { useAuth } from './AuthContext';
@@ -36,6 +36,7 @@ export function FinanceProvider({ children }) {
   const [history,     setHistory]     = useState([]);
   const [categories,  setCategories]  = useState([]);
   const [expenses,    setExpenses]    = useState([]);
+  const [incomes,     setIncomes]     = useState([]);   // ← NUEVO
   const [tasaCambio,  setTasaCambio]  = useState(0.0572);
   const [loading,     setLoading]     = useState(false);
 
@@ -49,24 +50,30 @@ export function FinanceProvider({ children }) {
 
   const reload = useCallback(async () => {
     if (!user) {
-      setMonthData(null); setHistory([]); setCategories([]); setExpenses([]);
+      setMonthData(null); setHistory([]); setCategories([]);
+      setExpenses([]); setIncomes([]);
       return;
     }
     setLoading(true);
     try {
-      const [cats, exps, hist] = await Promise.all([
+      const [cats, exps, incs, hist] = await Promise.all([
         CategoryService.getAll(user.uid),
         ExpenseService.getByMonth(user.uid, activeMonthKey),
+        IncomeService.getByMonth(user.uid, activeMonthKey),
         MonthService.getHistory(user.uid),
       ]);
       setCategories(cats);
       setExpenses(exps);
+      setIncomes(incs);
       setHistory(hist);
 
-      // El mes debe cargarse después de las categorías
       const month = await MonthService.getOrCreate(
         user.uid, activeMonthKey, cats, user.defaultIncome || 10000
       );
+
+      // Si hay ingresos registrados, el income del mes ya fue sincronizado
+      // por IncomeService.syncMonthIncome. Si no hay ingresos, usamos el
+      // income guardado en el documento del mes (retrocompatible).
       setMonthData(month);
     } catch (e) {
       console.error('Error cargando datos:', e);
@@ -83,7 +90,6 @@ export function FinanceProvider({ children }) {
   const goToNextMonth    = useCallback(() => setActiveMonthKey((k) => offsetMonth(k, +1)), []);
   const goToCurrentMonth = useCallback(() => setActiveMonthKey(currentMonthKey), [currentMonthKey]);
 
-  // Editar celda (override manual de presupuesto)
   const updateCell = useCallback(async (rowId, semana, valor) => {
     if (!user || !monthData) return;
     const before = monthData.rows.find((r) => r.id === rowId)?.[semana];
@@ -118,6 +124,40 @@ export function FinanceProvider({ children }) {
     const { label } = fromMonthKey(activeMonthKey);
     audit('FINANCE_SNAPSHOT', { detail: `Snapshot guardado para ${label}` });
   }, [user, activeMonthKey, audit]);
+
+  // ── INCOMES CRUD ──────────────────────────────────────────
+  const addIncome = useCallback(async (data) => {
+    if (!user) return;
+    const entry = await IncomeService.create(user.uid, activeMonthKey, data);
+    audit('INCOME_CREATE', {
+      detail: `${fmt(data.monto)}${data.descripcion ? ` — "${data.descripcion}"` : ''} (${data.tipo})`,
+      after: data,
+    });
+    await reload();
+    return entry;
+  }, [user, activeMonthKey, audit, reload]);
+
+  const editIncome = useCallback(async (incomeId, updates) => {
+    if (!user) return;
+    const before = incomes.find((i) => i.id === incomeId);
+    await IncomeService.update(user.uid, activeMonthKey, incomeId, updates);
+    audit('INCOME_EDIT', {
+      detail: `Ingreso editado: ${fmt(updates.monto || before?.monto)}`,
+      before, after: { ...before, ...updates },
+    });
+    await reload();
+  }, [user, activeMonthKey, incomes, audit, reload]);
+
+  const deleteIncome = useCallback(async (incomeId) => {
+    if (!user) return;
+    const target = incomes.find((i) => i.id === incomeId);
+    await IncomeService.delete(user.uid, activeMonthKey, incomeId);
+    audit('INCOME_DELETE', {
+      detail: `Eliminado: ${fmt(target?.monto)}${target?.descripcion ? ` — "${target.descripcion}"` : ''}`,
+      before: target,
+    });
+    await reload();
+  }, [user, activeMonthKey, incomes, audit, reload]);
 
   // ── EXPENSES CRUD ─────────────────────────────────────────
   const addExpense = useCallback(async (data) => {
@@ -178,9 +218,9 @@ export function FinanceProvider({ children }) {
 
   const deleteCategory = useCallback(async (catId) => {
     if (!user) return;
-    const target     = categories.find((c) => c.id === catId);
+    const target      = categories.find((c) => c.id === catId);
     const hasExpenses = expenses.some((e) => e.categoryId === catId);
-    const result     = await CategoryService.delete(user.uid, catId, hasExpenses);
+    const result      = await CategoryService.delete(user.uid, catId, hasExpenses);
     audit('CATEGORY_DELETE', {
       detail: `"${target?.nombre}" ${result.type === 'soft' ? 'desactivada' : 'eliminada'}`,
       before: target,
@@ -202,12 +242,18 @@ export function FinanceProvider({ children }) {
 
   const updateTasaCambio = useCallback((tasa) => setTasaCambio(tasa), []);
 
-  // Derivados
-  // Merge the category color from the live `categories` state into the
-  // stored month rows. The reason is that rows are snapshots taken when the
-  // month document was created, so if the user edits the category color later
-  // the row would still keep the old colour. We override here on every
-  // calculation so the dashboard (and charts) always show the current color.
+  // ── Derivados ─────────────────────────────────────────────
+
+  // Income total del mes:
+  // Si hay ingresos registrados → suma de todos ellos (variable)
+  // Si no hay ninguno → usa el income fijo del documento del mes
+  const ingresoTotal = incomes.length > 0
+    ? IncomeService.totalFromList(incomes)
+    : (monthData?.income || 0);
+
+  // Ingresos por semana (para la fila de ingresos en la tabla)
+  const ingresosBySemana = IncomeService.bySemana(incomes);
+
   const rows = monthData
     ? calcularTotales([
         ...monthData.rows.map((r) => {
@@ -221,10 +267,10 @@ export function FinanceProvider({ children }) {
         }),
         { id:'total',  categoria:'Total Gastos', s1:0,s2:0,s3:0,s4:0, editable:false, color:'#455a64' },
         { id:'ahorro', categoria:'Ahorro',        s1:0,s2:0,s3:0,s4:0, editable:false, color:'#00897b' },
-      ], monthData.income)
+      ], ingresoTotal)
     : [];
 
-  const income      = monthData?.income || 0;
+  const income      = ingresoTotal;
   const totalMes    = rows.filter((r) => r.editable).reduce((a,r) => a+r.s1+r.s2+r.s3+r.s4, 0);
   const ahorroMes   = income - totalMes;
   const pctGastos   = income > 0 ? ((totalMes/income)*100).toFixed(1) : '0.0';
@@ -242,7 +288,11 @@ export function FinanceProvider({ children }) {
       rows, ingreso: income, totalMes, ahorroMes, pctGastos, pctCarro, alertaCarro, tasaCambio,
       updateCell, updateIngreso, updateTasaCambio, saveSnapshot,
       history,
+      // Ingresos variables
+      incomes, ingresosBySemana, addIncome, editIncome, deleteIncome,
+      // Gastos
       expenses, addExpense, editExpense, deleteExpense,
+      // Categorías
       categories, addCategory, updateCategory, deleteCategory, reactivateCategory,
     }}>
       {children}

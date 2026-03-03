@@ -2,12 +2,11 @@
 // FINANZASPRO — SERVICIOS DE FIREBASE / FIRESTORE
 // ============================================================
 //
-// Estructura de colecciones en Firestore:
-//
 //  users/{uid}                          ← perfil del usuario
 //  users/{uid}/categories/{catId}       ← categorías propias
 //  users/{uid}/months/{monthKey}        ← datos financieros mensuales
 //  users/{uid}/expenses/{expenseId}     ← gastos individuales
+//  users/{uid}/incomes/{incomeId}       ← ingresos variables ← NUEVO
 //  users/{uid}/cards/{cardId}           ← tarjetas de crédito
 //  users/{uid}/history/{monthKey}       ← snapshots del historial
 //  users/{uid}/audit/{logId}            ← logs de auditoría
@@ -17,8 +16,7 @@
 import {
   doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc,
   collection, query, where, orderBy, limit,
-  addDoc, serverTimestamp, Timestamp,
-  writeBatch, onSnapshot,
+  addDoc, writeBatch,
 } from 'firebase/firestore';
 import { db } from './config';
 
@@ -53,15 +51,6 @@ export function dateToWeek(dateStr) {
   return 4;
 }
 
-// Convierte Timestamp de Firestore a ISO string
-function tsToISO(ts) {
-  if (!ts) return new Date().toISOString();
-  if (typeof ts === 'string') return ts;
-  if (ts?.toDate) return ts.toDate().toISOString();
-  return new Date().toISOString();
-}
-
-// Limpia undefined/null para Firestore
 function clean(obj) {
   return Object.fromEntries(
     Object.entries(obj).filter(([, v]) => v !== undefined && v !== null)
@@ -100,16 +89,24 @@ export const ICON_OPTIONS = [
 export const CARD_COLORS   = ['#1a237e','#0d47a1','#006064','#1b5e20','#4a148c','#b71c1c','#e65100','#212121','#37474f','#880e4f'];
 export const CARD_NETWORKS = ['visa','mastercard','amex','carnet'];
 
+// Tipos de ingreso extra
+export const INCOME_TYPES = [
+  { id:'salario',    label:'Salario / Nómina',   icono:'💼', color:'#4fc3f7' },
+  { id:'freelance',  label:'Freelance',           icono:'💻', color:'#69f0ae' },
+  { id:'bono',       label:'Bono / Comisión',     icono:'🎯', color:'#ffca28' },
+  { id:'venta',      label:'Venta',               icono:'🏷️', color:'#fb8c00' },
+  { id:'transferencia', label:'Transferencia',    icono:'💸', color:'#ce93d8' },
+  { id:'otro',       label:'Otro',                icono:'➕', color:'#90caf9' },
+];
+
 // ─── USER SERVICE ─────────────────────────────────────────────
 
 export const UserService = {
-  /** Obtener perfil del usuario */
   async getProfile(uid) {
     const snap = await getDoc(doc(db, 'users', uid));
     return snap.exists() ? snap.data() : null;
   },
 
-  /** Crear o actualizar perfil (se llama tras Firebase Auth register) */
   async createProfile(uid, { email, name }) {
     const now = new Date().toISOString();
     const profile = {
@@ -128,18 +125,14 @@ export const UserService = {
     };
     await setDoc(doc(db, 'users', uid), profile);
 
-    // Inicializar categorías por defecto
     const batch = writeBatch(db);
     for (const cat of DEFAULT_CATEGORIES) {
-      const catRef = doc(db, 'users', uid, 'categories', cat.id);
-      batch.set(catRef, { ...cat, createdAt: now });
+      batch.set(doc(db, 'users', uid, 'categories', cat.id), { ...cat, createdAt: now });
     }
     await batch.commit();
-
     return profile;
   },
 
-  /** Actualizar perfil */
   async updateProfile(uid, updates) {
     const ref = doc(db, 'users', uid);
     await updateDoc(ref, { ...clean(updates), updatedAt: new Date().toISOString() });
@@ -151,11 +144,9 @@ export const UserService = {
 // ─── CATEGORY SERVICE ─────────────────────────────────────────
 
 export const CategoryService = {
-  /** Obtener todas las categorías del usuario */
   async getAll(uid) {
     const snap = await getDocs(collection(db, 'users', uid, 'categories'));
     if (snap.empty) {
-      // Primera vez: sembrar defaults
       const batch = writeBatch(db);
       const now = new Date().toISOString();
       for (const cat of DEFAULT_CATEGORIES) {
@@ -167,7 +158,6 @@ export const CategoryService = {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
-  /** Crear categoría */
   async create(uid, { nombre, color, icono }) {
     const now = new Date().toISOString();
     const catId = 'cat_' + Date.now().toString(36);
@@ -176,7 +166,6 @@ export const CategoryService = {
     return { id: catId, ...data };
   },
 
-  /** Actualizar categoría */
   async update(uid, catId, updates) {
     const ref = doc(db, 'users', uid, 'categories', catId);
     await updateDoc(ref, clean(updates));
@@ -184,58 +173,149 @@ export const CategoryService = {
     return { id: catId, ...snap.data() };
   },
 
-  /** Eliminar o desactivar */
   async delete(uid, catId, hasExpenses) {
     const ref = doc(db, 'users', uid, 'categories', catId);
     if (hasExpenses) {
       await updateDoc(ref, { activa: false });
-      return { type: 'soft', message: 'Categoría desactivada (tiene gastos asociados)' };
+      return { type: 'soft', message: 'Categoría desactivada' };
     }
     await deleteDoc(ref);
     return { type: 'hard', message: 'Categoría eliminada' };
   },
 
-  /** Reactivar */
   async reactivate(uid, catId) {
     await updateDoc(doc(db, 'users', uid, 'categories', catId), { activa: true });
+  },
+};
+
+// ─── INCOME SERVICE (ingresos variables) ─────────────────────
+//
+//  Cada IncomeEntry representa un pago recibido:
+//  { id, uid, monthKey, semana, monto, descripcion, tipo, fecha, createdAt }
+//
+//  El ingreso total del mes = suma de todos los IncomeEntry del mes.
+//  Esto reemplaza el campo income fijo del documento de mes.
+//  Para retrocompatibilidad, si no hay IncomeEntries se usa month.income.
+
+export const IncomeService = {
+  /** Obtener todos los ingresos de un mes */
+  async getByMonth(uid, monthKey) {
+    const q = query(
+      collection(db, 'users', uid, 'incomes'),
+      where('monthKey', '==', monthKey),
+      orderBy('fecha', 'desc')
+    );
+    try {
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch {
+      // Fallback sin orderBy si falta el índice
+      const snap = await getDocs(
+        query(collection(db, 'users', uid, 'incomes'), where('monthKey', '==', monthKey))
+      );
+      return snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+    }
+  },
+
+  /** Registrar un ingreso */
+  async create(uid, monthKey, { monto, descripcion, tipo, fecha }) {
+    const semana = dateToWeek(fecha);
+    const data = {
+      uid, monthKey, semana,
+      monto:       Number(monto) || 0,
+      descripcion: descripcion?.trim() || '',
+      tipo:        tipo || 'otro',
+      fecha,
+      createdAt:   new Date().toISOString(),
+    };
+    const ref = await addDoc(collection(db, 'users', uid, 'incomes'), data);
+    // Sincronizar el campo income del mes con la nueva suma total
+    await IncomeService.syncMonthIncome(uid, monthKey);
+    return { id: ref.id, ...data };
+  },
+
+  /** Actualizar un ingreso */
+  async update(uid, monthKey, incomeId, updates) {
+    if (updates.fecha) updates.semana = dateToWeek(updates.fecha);
+    await updateDoc(
+      doc(db, 'users', uid, 'incomes', incomeId),
+      { ...clean(updates), updatedAt: new Date().toISOString() }
+    );
+    await IncomeService.syncMonthIncome(uid, monthKey);
+  },
+
+  /** Eliminar un ingreso */
+  async delete(uid, monthKey, incomeId) {
+    await deleteDoc(doc(db, 'users', uid, 'incomes', incomeId));
+    await IncomeService.syncMonthIncome(uid, monthKey);
+  },
+
+  /** Recalcular y guardar el income total del mes en el documento del mes */
+  async syncMonthIncome(uid, monthKey) {
+    const incomes = await IncomeService.getByMonth(uid, monthKey);
+    const total   = incomes.reduce((a, i) => a + (Number(i.monto) || 0), 0);
+    const ref     = doc(db, 'users', uid, 'months', monthKey);
+    const snap    = await getDoc(ref);
+    if (snap.exists()) {
+      await updateDoc(ref, { income: total, updatedAt: new Date().toISOString() });
+    }
+    return total;
+  },
+
+  /** Suma total de ingresos de un mes */
+  totalFromList(incomes) {
+    return incomes.reduce((a, i) => a + (Number(i.monto) || 0), 0);
+  },
+
+  /** Ingresos agrupados por semana { s1, s2, s3, s4 } */
+  bySemana(incomes) {
+    return incomes.reduce((acc, i) => {
+      const key = `s${i.semana}`;
+      acc[key] = (acc[key] || 0) + (Number(i.monto) || 0);
+      return acc;
+    }, { s1: 0, s2: 0, s3: 0, s4: 0 });
   },
 };
 
 // ─── EXPENSE SERVICE ──────────────────────────────────────────
 
 export const ExpenseService = {
-  /** Obtener gastos de un mes */
   async getByMonth(uid, monthKey) {
     const q = query(
       collection(db, 'users', uid, 'expenses'),
       where('monthKey', '==', monthKey),
       orderBy('fecha', 'desc')
     );
-    const snap = await getDocs(q);
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    try {
+      const snap = await getDocs(q);
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    } catch {
+      const snap = await getDocs(
+        query(collection(db, 'users', uid, 'expenses'), where('monthKey', '==', monthKey))
+      );
+      return snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .sort((a, b) => (b.fecha || '').localeCompare(a.fecha || ''));
+    }
   },
 
-  /** Registrar gasto */
   async create(uid, monthKey, { categoryId, monto, descripcion, fecha }) {
     const semana = dateToWeek(fecha);
     const data = {
       categoryId,
       monto:       Number(monto) || 0,
       descripcion: descripcion?.trim() || '',
-      fecha,
-      semana,
-      monthKey,
-      uid,
+      fecha, semana, monthKey, uid,
       createdAt:   new Date().toISOString(),
       updatedAt:   new Date().toISOString(),
     };
     const ref = await addDoc(collection(db, 'users', uid, 'expenses'), data);
-    // Recalcular totales del mes
     await MonthService.syncFromExpenses(uid, monthKey);
     return { id: ref.id, ...data };
   },
 
-  /** Actualizar gasto */
   async update(uid, monthKey, expenseId, updates) {
     if (updates.fecha) updates.semana = dateToWeek(updates.fecha);
     await updateDoc(
@@ -245,7 +325,6 @@ export const ExpenseService = {
     await MonthService.syncFromExpenses(uid, monthKey);
   },
 
-  /** Eliminar gasto */
   async delete(uid, monthKey, expenseId) {
     await deleteDoc(doc(db, 'users', uid, 'expenses', expenseId));
     await MonthService.syncFromExpenses(uid, monthKey);
@@ -255,11 +334,9 @@ export const ExpenseService = {
 // ─── MONTH SERVICE ────────────────────────────────────────────
 
 export const MonthService = {
-  /** Obtener mes (crea uno si no existe) */
   async getOrCreate(uid, monthKey, categories, defaultIncome = 10000) {
     const ref  = doc(db, 'users', uid, 'months', monthKey);
     const snap = await getDoc(ref);
-
     if (snap.exists()) return snap.data();
 
     const now  = new Date().toISOString();
@@ -283,7 +360,6 @@ export const MonthService = {
     return newMonth;
   },
 
-  /** Guardar mes */
   async save(uid, monthKey, data) {
     const ref = doc(db, 'users', uid, 'months', monthKey);
     const updated = { ...data, updatedAt: new Date().toISOString() };
@@ -291,7 +367,6 @@ export const MonthService = {
     return updated;
   },
 
-  /** Actualizar ingreso */
   async updateIncome(uid, monthKey, income) {
     const ref = doc(db, 'users', uid, 'months', monthKey);
     await updateDoc(ref, { income: Number(income) || 0, updatedAt: new Date().toISOString() });
@@ -299,39 +374,33 @@ export const MonthService = {
     return snap.data();
   },
 
-  /** Recalcular rows sumando todos los gastos del mes */
   async syncFromExpenses(uid, monthKey) {
-    // Obtener gastos
     const q = query(
       collection(db, 'users', uid, 'expenses'),
       where('monthKey', '==', monthKey)
     );
-    const expSnap = await getDocs(q);
+    const expSnap  = await getDocs(q);
     const expenses = expSnap.docs.map((d) => d.data());
 
-    // Obtener mes
     const monthRef  = doc(db, 'users', uid, 'months', monthKey);
     const monthSnap = await getDoc(monthRef);
     if (!monthSnap.exists()) return;
     const month = monthSnap.data();
 
-    // Agrupar por categoría
     const totals = {};
     expenses.forEach((e) => {
       if (!totals[e.categoryId]) totals[e.categoryId] = { s1:0, s2:0, s3:0, s4:0 };
       totals[e.categoryId][`s${e.semana}`] += e.monto;
     });
 
-    // Actualizar rows
     const updatedRows = month.rows.map((r) => {
       const t = totals[r.id];
       return t ? { ...r, s1:t.s1, s2:t.s2, s3:t.s3, s4:t.s4 } : { ...r, s1:0, s2:0, s3:0, s4:0 };
     });
 
-    // Agregar rows para categorías con gastos que no están en la tabla
     const existingIds = new Set(updatedRows.map((r) => r.id));
-    const catsSnap = await getDocs(collection(db, 'users', uid, 'categories'));
-    const catsMap  = {};
+    const catsSnap    = await getDocs(collection(db, 'users', uid, 'categories'));
+    const catsMap     = {};
     catsSnap.docs.forEach((d) => { catsMap[d.id] = { id: d.id, ...d.data() }; });
 
     Object.keys(totals).forEach((catId) => {
@@ -346,7 +415,6 @@ export const MonthService = {
     return { ...month, rows: updatedRows };
   },
 
-  /** Guardar snapshot en historial */
   async snapshot(uid, monthKey) {
     const monthSnap = await getDoc(doc(db, 'users', uid, 'months', monthKey));
     if (!monthSnap.exists()) return null;
@@ -364,7 +432,6 @@ export const MonthService = {
     return entry;
   },
 
-  /** Listar historial */
   async getHistory(uid) {
     const snap = await getDocs(
       query(collection(db, 'users', uid, 'history'), orderBy('monthKey', 'desc'))
@@ -377,13 +444,6 @@ export const MonthService = {
 
 export const CardService = {
   async getAll(uid) {
-    // The query below uses a `where` + `orderBy` combo, which in Firestore
-    // requires a composite index. When the index is missing the call will
-    // reject with a failed-precondition error and the page ends up with an
-    // empty array (cards.length stays at 0 even though the documents exist).
-    //
-    // We try the indexed query first; if it fails we fall back to a simple
-    // grab‑everything query and filter/sort client‑side so the UI still works.
     try {
       const q = query(
         collection(db, 'users', uid, 'cards'),
@@ -393,7 +453,7 @@ export const CardService = {
       const snap = await getDocs(q);
       return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
     } catch (e) {
-      console.warn('CardService.getAll index query failed, falling back:', e);
+      console.warn('CardService.getAll fallback:', e);
       const snap = await getDocs(collection(db, 'users', uid, 'cards'));
       return snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
@@ -450,7 +510,7 @@ export const CardService = {
       tipo:  tipo || 'parcial',
       nota:  nota?.trim() || '',
     };
-    const pagos      = [payment, ...(card.pagos || [])];
+    const pagos       = [payment, ...(card.pagos || [])];
     const saldoActual = Math.max(0, card.saldoActual - payment.monto);
     await updateDoc(ref, { pagos, saldoActual, updatedAt: new Date().toISOString() });
     return { ...card, id: cardId, pagos, saldoActual };
@@ -467,7 +527,6 @@ export const CardService = {
 // ─── AUDIT SERVICE ────────────────────────────────────────────
 
 export const AuditService = {
-  /** Guardar log en Firestore */
   async log(uid, action, opts = {}) {
     const actionMeta = AUDIT_ACTIONS[action] || { label: action, icon: '📝', module: 'Unknown', severity: 'info' };
     const entry = {
@@ -489,10 +548,8 @@ export const AuditService = {
       url:        window.location.pathname,
     };
 
-    // Guardar en Firestore (no-await para no bloquear UI)
     addDoc(collection(db, 'users', uid, 'audit'), clean(entry)).catch(console.error);
 
-    // También guardar localmente como backup
     try {
       const localLogs = JSON.parse(localStorage.getItem('fp_audit_local') || '[]');
       localLogs.unshift(entry);
@@ -502,7 +559,6 @@ export const AuditService = {
     return entry;
   },
 
-  /** Obtener logs de Firestore */
   async getAll(uid, limitN = 500) {
     const q = query(
       collection(db, 'users', uid, 'audit'),
@@ -513,7 +569,6 @@ export const AuditService = {
     return snap.docs.map((d) => ({ id: d.id, ...d.data() }));
   },
 
-  /** Exportar como CSV */
   exportCSV(logs) {
     const headers = ['Fecha','Hora','Módulo','Acción','Usuario','Email','Detalle','Severidad','Dispositivo','Navegador','URL'];
     const rows = logs.map((l) => {
@@ -547,7 +602,6 @@ function getBrowser() {
   return 'Unknown';
 }
 
-// Acciones de auditoría (sin cambios)
 export const AUDIT_ACTIONS = {
   AUTH_LOGIN:           { label:'Inicio de sesión',         icon:'🔐', module:'Auth',       severity:'info'    },
   AUTH_LOGOUT:          { label:'Cierre de sesión',         icon:'👋', module:'Auth',       severity:'info'    },
@@ -557,6 +611,9 @@ export const AUDIT_ACTIONS = {
   FINANCE_INCOME_EDIT:  { label:'Ingreso mensual editado',  icon:'💰', module:'Finanzas',   severity:'info'    },
   FINANCE_CELL_EDIT:    { label:'Celda de tabla editada',   icon:'✏️', module:'Finanzas',   severity:'info'    },
   FINANCE_SNAPSHOT:     { label:'Snapshot guardado',        icon:'📸', module:'Finanzas',   severity:'success' },
+  INCOME_CREATE:        { label:'Ingreso registrado',       icon:'💵', module:'Ingresos',   severity:'success' },
+  INCOME_EDIT:          { label:'Ingreso editado',          icon:'✏️', module:'Ingresos',   severity:'info'    },
+  INCOME_DELETE:        { label:'Ingreso eliminado',        icon:'🗑️', module:'Ingresos',   severity:'warning' },
   EXPENSE_CREATE:       { label:'Gasto registrado',         icon:'➕', module:'Gastos',     severity:'success' },
   EXPENSE_EDIT:         { label:'Gasto editado',            icon:'✏️', module:'Gastos',     severity:'info'    },
   EXPENSE_DELETE:       { label:'Gasto eliminado',          icon:'🗑️', module:'Gastos',     severity:'warning' },

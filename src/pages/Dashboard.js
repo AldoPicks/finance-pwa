@@ -28,12 +28,14 @@ import ExpensesPage from './ExpensesPage';
 import CardsPage from './CardsPage';
 import LogsPage from './LogsPage';
 import { FULL_VERSION } from '../version';
+import IncomesPage from './IncomesPage';
 
 const DRAWER_W = 240;
 
 const NAV_ITEMS = [
   { label: 'Dashboard',  icon: <DashboardIcon fontSize="small" />, path: '/' },
   { label: 'Gastos',     icon: <ReceiptLong fontSize="small" />,   path: '/expenses' },
+  { label: 'Ingresos',   icon: <Savings fontSize="small" />,       path: '/incomes' },
   { label: 'Tarjetas',   icon: <CreditCard fontSize="small" />,    path: '/cards' },
   { label: 'Categorías', icon: <CategoryIcon fontSize="small" />,  path: '/categories' },
   { label: 'Historial',  icon: <History fontSize="small" />,       path: '/history' },
@@ -273,6 +275,7 @@ export default function Dashboard() {
           <Routes>
             <Route path="/"           element={<DashboardHome />} />
             <Route path="/expenses"   element={<ExpensesPage />} />
+            <Route path="/incomes"    element={<IncomesPage />} />
             <Route path="/cards"      element={<CardsPage />} />
             <Route path="/categories" element={<CategoriesPage />} />
             <Route path="/history"    element={<HistoryPage />} />
