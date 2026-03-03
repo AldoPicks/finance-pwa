@@ -42,8 +42,7 @@ function EditableCell({ value, rowId, semana, editable }) {
     >
       {editing ? (
         <TextField
-          autoFocus
-          size="small"
+          autoFocus size="small"
           value={localVal}
           onChange={(e) => setLocalVal(e.target.value)}
           onBlur={handleBlur}
@@ -74,13 +73,32 @@ export default function FinanceTable() {
   const [localIngreso, setLocalIngreso] = useState(ingreso);
 
   const getRowStyle = (row) => {
-    if (row.id === 'total') return { bgcolor: 'rgba(79,195,247,0.06)', fontWeight: 700 };
+    if (row.id === 'total')  return { bgcolor: 'rgba(79,195,247,0.06)',  fontWeight: 700 };
     if (row.id === 'ahorro') return { bgcolor: 'rgba(105,240,174,0.06)', fontWeight: 700 };
     return {};
   };
 
-  const totalPorSemana = (semana) =>
-    rows.filter((r) => r.editable).reduce((acc, r) => acc + (Number(r[semana]) || 0), 0);
+  // ── Cálculos por semana ───────────────────────────────────
+  const ingresoSemanal = ingreso / 4;
+
+  const gastoSem = SEMANAS.map((s) =>
+    rows.filter((r) => r.editable).reduce((acc, r) => acc + (Number(r[s]) || 0), 0)
+  );
+
+  const ahorroSem   = gastoSem.map((g) => ingresoSemanal - g);
+  const pctGastoSem = gastoSem.map((g) =>
+    ingresoSemanal > 0 ? ((g / ingresoSemanal) * 100).toFixed(1) : '0.0'
+  );
+
+  const totalGastoMes  = gastoSem.reduce((a, b) => a + b, 0);
+  const totalAhorroMes = ahorroSem.reduce((a, b) => a + b, 0);
+  const pctGastoTotal  = ingreso > 0 ? ((totalGastoMes  / ingreso) * 100).toFixed(1) : '0.0';
+  const pctAhorroTotal = ingreso > 0 ? ((totalAhorroMes / ingreso) * 100).toFixed(1) : '0.0';
+
+  // Color del ahorro: verde si positivo, rojo si negativo
+  const ahorroColor = (val) => val >= 0 ? '#69f0ae' : '#ff5252';
+  // Color del % gasto semanal
+  const pctColor = (pct) => Number(pct) > 80 ? '#ff5252' : Number(pct) > 60 ? '#ffca28' : '#69f0ae';
 
   return (
     <Box>
@@ -124,8 +142,10 @@ export default function FinanceTable() {
               <TableCell align="right">% Ingreso</TableCell>
             </TableRow>
           </TableHead>
+
           <TableBody>
-            {rows.map((row) => {
+            {/* ── Filas normales ── */}
+            {rows.filter((row) => row.id !== 'ahorro').map((row) => {
               const totalRow = SEMANAS.reduce((acc, s) => acc + (Number(row[s]) || 0), 0);
               const pct = ingreso > 0 ? ((totalRow / ingreso) * 100).toFixed(1) : '0.0';
               const isSpecial = row.id === 'total' || row.id === 'ahorro';
@@ -143,42 +163,30 @@ export default function FinanceTable() {
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: row.color, flexShrink: 0 }} />
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          fontFamily: isSpecial ? 'Syne' : 'DM Mono',
-                          fontWeight: isSpecial ? 700 : 400,
-                          fontSize: '0.82rem',
-                          color: isSpecial ? 'text.primary' : 'text.secondary',
-                        }}
-                      >
+                      <Typography variant="body2" sx={{
+                        fontFamily: isSpecial ? 'Syne' : 'DM Mono',
+                        fontWeight: isSpecial ? 700 : 400,
+                        fontSize: '0.82rem',
+                        color: isSpecial ? 'text.primary' : 'text.secondary',
+                      }}>
                         {row.categoria}
                       </Typography>
                       {!row.editable && <Lock sx={{ fontSize: 11, color: 'text.disabled' }} />}
                     </Box>
                   </TableCell>
 
-                  {/* Celdas de semanas */}
+                  {/* Celdas semanas */}
                   {SEMANAS.map((s) => (
-                    <EditableCell
-                      key={s}
-                      rowId={row.id}
-                      semana={s}
-                      value={row[s]}
-                      editable={row.editable}
-                    />
+                    <EditableCell key={s} rowId={row.id} semana={s} value={row[s]} editable={row.editable} />
                   ))}
 
-                  {/* Total row */}
+                  {/* Total */}
                   <TableCell align="right">
-                    <Typography
-                      variant="body2"
-                      sx={{
-                        fontFamily: 'DM Mono', fontSize: '0.82rem',
-                        fontWeight: isSpecial ? 700 : 400,
-                        color: row.id === 'ahorro' ? '#69f0ae' : row.id === 'total' ? '#4fc3f7' : 'text.primary',
-                      }}
-                    >
+                    <Typography variant="body2" sx={{
+                      fontFamily: 'DM Mono', fontSize: '0.82rem',
+                      fontWeight: isSpecial ? 700 : 400,
+                      color: row.id === 'ahorro' ? '#69f0ae' : row.id === 'total' ? '#4fc3f7' : 'text.primary',
+                    }}>
                       {fmt(totalRow)}
                     </Typography>
                   </TableCell>
@@ -186,20 +194,114 @@ export default function FinanceTable() {
                   {/* % ingreso */}
                   <TableCell align="right">
                     {row.editable && (
-                      <Chip
-                        label={`${pct}%`}
-                        size="small"
-                        sx={{
-                          fontFamily: 'DM Mono', fontSize: '0.68rem', height: 20,
-                          bgcolor: Number(pct) > 30 ? 'rgba(255,82,82,0.15)' : 'rgba(79,195,247,0.1)',
-                          color: Number(pct) > 30 ? '#ff5252' : '#4fc3f7',
-                        }}
-                      />
+                      <Chip label={`${pct}%`} size="small" sx={{
+                        fontFamily: 'DM Mono', fontSize: '0.68rem', height: 20,
+                        bgcolor: Number(pct) > 30 ? 'rgba(255,82,82,0.15)' : 'rgba(79,195,247,0.1)',
+                        color: Number(pct) > 30 ? '#ff5252' : '#4fc3f7',
+                      }} />
                     )}
                   </TableCell>
                 </TableRow>
               );
             })}
+
+            {/* ── Divisor ── */}
+            <TableRow>
+              <TableCell colSpan={7} sx={{ py: 0.3, borderBottom: '1px solid rgba(79,195,247,0.15)' }} />
+            </TableRow>
+
+            {/* ── Fila: Ahorro semanal ── */}
+            <TableRow sx={{ bgcolor: 'rgba(105,240,174,0.04)' }}>
+              <TableCell>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: '#69f0ae', flexShrink: 0 }} />
+                  <Typography variant="body2" sx={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '0.82rem' }}>
+                    Ahorro semanal
+                  </Typography>
+                  <Tooltip title={`Ingreso semanal estimado: ${fmt(ingresoSemanal)}`} arrow>
+                    <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'DM Mono', fontSize: '0.65rem', cursor: 'help' }}>
+                      ({fmt(ingresoSemanal)}/sem)
+                    </Typography>
+                  </Tooltip>
+                </Box>
+              </TableCell>
+
+              {ahorroSem.map((ahorro, i) => (
+                <TableCell key={i} align="right">
+                  <Typography variant="body2" sx={{
+                    fontFamily: 'DM Mono', fontSize: '0.82rem', fontWeight: 600,
+                    color: ahorroColor(ahorro),
+                  }}>
+                    {fmt(ahorro)}
+                  </Typography>
+                </TableCell>
+              ))}
+
+              {/* Total ahorro mes */}
+              <TableCell align="right">
+                <Typography variant="body2" sx={{
+                  fontFamily: 'DM Mono', fontSize: '0.82rem', fontWeight: 700,
+                  color: ahorroColor(totalAhorroMes),
+                }}>
+                  {fmt(totalAhorroMes)}
+                </Typography>
+              </TableCell>
+
+              {/* % ahorro total */}
+              <TableCell align="right">
+                <Chip label={`${pctAhorroTotal}%`} size="small" sx={{
+                  fontFamily: 'DM Mono', fontSize: '0.68rem', height: 20,
+                  bgcolor: Number(pctAhorroTotal) >= 20
+                    ? 'rgba(105,240,174,0.15)'
+                    : Number(pctAhorroTotal) >= 0
+                      ? 'rgba(255,202,40,0.15)'
+                      : 'rgba(255,82,82,0.15)',
+                  color: Number(pctAhorroTotal) >= 20 ? '#69f0ae' : Number(pctAhorroTotal) >= 0 ? '#ffca28' : '#ff5252',
+                }} />
+              </TableCell>
+            </TableRow>
+
+            {/* ── Fila: % gasto por semana ── */}
+            <TableRow sx={{ bgcolor: 'rgba(79,195,247,0.02)', '& td': { border: 0 } }}>
+              <TableCell>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: '#4fc3f7', flexShrink: 0 }} />
+                  <Typography variant="body2" sx={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '0.82rem' }}>
+                    % gasto / ingreso semanal
+                  </Typography>
+                </Box>
+              </TableCell>
+
+              {pctGastoSem.map((pct, i) => (
+                <TableCell key={i} align="right">
+                  <Chip label={`${pct}%`} size="small" sx={{
+                    fontFamily: 'DM Mono', fontSize: '0.68rem', height: 20,
+                    bgcolor: Number(pct) > 80
+                      ? 'rgba(255,82,82,0.15)'
+                      : Number(pct) > 60
+                        ? 'rgba(255,202,40,0.15)'
+                        : 'rgba(105,240,174,0.15)',
+                    color: Number(pct) > 80 ? '#ff5252' : Number(pct) > 60 ? '#ffca28' : '#69f0ae',
+                  }} />
+                </TableCell>
+              ))}
+
+              {/* % gasto total del mes */}
+              <TableCell align="right">
+                <Chip label={`${pctGastoTotal}%`} size="small" sx={{
+                  fontFamily: 'DM Mono', fontSize: '0.68rem', height: 20, fontWeight: 700,
+                  bgcolor: Number(pctGastoTotal) > 80
+                    ? 'rgba(255,82,82,0.2)'
+                    : Number(pctGastoTotal) > 60
+                      ? 'rgba(255,202,40,0.2)'
+                      : 'rgba(105,240,174,0.2)',
+                  color: Number(pctGastoTotal) > 80 ? '#ff5252' : Number(pctGastoTotal) > 60 ? '#ffca28' : '#69f0ae',
+                }} />
+              </TableCell>
+
+              <TableCell />
+            </TableRow>
+
           </TableBody>
         </Table>
       </TableContainer>

@@ -6,6 +6,7 @@ import {
 } from '@mui/material';
 import { Email, Lock, Visibility, VisibilityOff, AccountBalance, Person } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
+import { FULL_VERSION } from '../version';
 
 export default function Login() {
   const { login, register } = useAuth();
@@ -94,6 +95,13 @@ export default function Login() {
               sx={{ fontFamily: 'DM Mono', fontSize: '0.7rem', cursor: 'pointer', background: 'rgba(79,195,247,0.15)', color: '#4fc3f7', '&:hover': { background: 'rgba(79,195,247,0.25)' } }} />
           </Box>
         )}
+        {/* Versión */}
+        <Typography variant="caption" sx={{
+          display: 'block', textAlign: 'center', mt: 2,
+          color: 'rgba(255,255,255,0.2)', fontFamily: 'DM Mono', fontSize: '0.65rem',
+        }}>
+            {FULL_VERSION}
+        </Typography>
       </Paper>
     </Box>
   );

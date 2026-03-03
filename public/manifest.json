@@ -18,11 +18,12 @@
       "sizes": "512x512"
     }
   ],
-  "start_url": ".",
+  "start_url": "/finance-pwa/",
+  "scope": "/finance-pwa/",
   "display": "standalone",
   "theme_color": "#0d1b2a",
   "background_color": "#0d1b2a",
-  "description": "Aplicación de gestión de finanzas personales con modo offline",
-  "orientation": "portrait-primary",
+  "description": "Aplicación de gestión de finanzas personales",
+  "orientation": "any",
   "categories": ["finance", "productivity"]
 }

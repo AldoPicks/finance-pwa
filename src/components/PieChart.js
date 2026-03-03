@@ -23,7 +23,7 @@ export default function PieChart() {
 
   // Use the MUI theme palette to pick appropriate text colors; this ensures
   // the legend/tooltip always match the app's light/dark settings.
-  const legendColor   = theme.palette.text.primary;
+  const legendColor  = '#ffffff';
   const tooltipBg     = isDark ? 'rgba(15,32,64,0.97)' : 'rgba(255,255,255,0.97)';
   const tooltipText   = theme.palette.text.primary;
   const tooltipBorder = isDark ? 'rgba(79,195,247,0.4)' : 'rgba(79,195,247,0.5)';

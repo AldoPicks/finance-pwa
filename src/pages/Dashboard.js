@@ -16,7 +16,8 @@ import { useFinance } from '../context/FinanceContext';
 import { useThemeMode } from '../context/ThemeContext';
 import { useExchangeRate } from '../hooks/useExchangeRate';
 import FinanceTable from '../components/FinanceTable';
-import PieChart from '../components/PieChart';
+//import PieChart from '../components/PieChart';
+import RadarChart from '../components/RadarChart';
 import SummaryCard from '../components/SummaryCard';
 import BarChart from '../components/BarChart';
 import MonthNavigator from '../components/MonthNavigator';
@@ -26,6 +27,7 @@ import CategoriesPage from './CategoriesPage';
 import ExpensesPage from './ExpensesPage';
 import CardsPage from './CardsPage';
 import LogsPage from './LogsPage';
+import { FULL_VERSION } from '../version';
 
 const DRAWER_W = 240;
 
@@ -131,6 +133,14 @@ function SidebarContent({ onNav }) {
           sx={{ mt: 1, fontFamily: 'Syne', fontSize: '0.78rem', color: 'rgba(255,255,255,0.4)', '&:hover': { color: '#ff5252', bgcolor: 'rgba(255,82,82,0.08)' } }}>
           Cerrar sesión
         </Button>
+        {/* Versión */}
+        <Typography variant="caption" sx={{
+          display: 'block', textAlign: 'center',
+          color: 'rgba(255,255,255,0.15)', fontFamily: 'DM Mono',
+          fontSize: '0.6rem', pb: 0.5,
+        }}>
+           { FULL_VERSION }
+        </Typography>
       </Box>
     </Box>
   );
@@ -169,7 +179,7 @@ function DashboardHome() {
       </Box>
 
       <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} lg={3}><SummaryCard title="Ingreso mensual" value={fmt(ingreso)} sub={fmtUSD(ingreso * rate)} icon={<TrendingUp />} color="#4fc3f7" /></Grid>
+        <Grid item xs={12} sm={6} lg={3}><SummaryCard title="Ingreso mensual" value={fmt(ingreso)} sub={`${fmtUSD(ingreso * rate)} USD`} icon={<TrendingUp />} color="#4fc3f7" /></Grid>
         <Grid item xs={12} sm={6} lg={3}><SummaryCard title="Total gastos" value={fmt(totalMes)} sub={`${pctGastos}% del ingreso`} icon={<TrendingDown />} color="#ff5252" /></Grid>
         <Grid item xs={12} sm={6} lg={3}><SummaryCard title="Ahorro estimado" value={fmt(ahorroMes)} sub={ahorroMes >= 0 ? 'Excelente 🎯' : 'Déficit ⚠️'} icon={<Savings />} color={ahorroMes >= 0 ? '#69f0ae' : '#ff5252'} /></Grid>
         <Grid item xs={12} sm={6} lg={3}><SummaryCard title="Abono carro" value={`${pctCarro}%`} sub={alertaCarro ? '¡Supera el umbral! ⚠️' : 'Del ingreso mensual'} icon={<Warning />} color={alertaCarro ? '#ffca28' : '#90caf9'} /></Grid>
@@ -178,8 +188,8 @@ function DashboardHome() {
       <Grid container spacing={2} sx={{ mb: 3 }}>
         <Grid item xs={12} md={5}>
           <Paper sx={{ p: 2.5, height: 340, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" sx={{ mb: 2, fontSize: '0.92rem' }}>Distribución por categoría</Typography>
-            <Box sx={{ flex: 1, minHeight: 0 }}><PieChart /></Box>
+            <Typography variant="h6" sx={{ mb: 2, fontSize: '0.92rem' }}>Gastos por categoría · semanas</Typography>
+            <Box sx={{ flex: 1, minHeight: 0 }}><RadarChart /></Box>
           </Paper>
         </Grid>
         <Grid item xs={12} md={7}>
