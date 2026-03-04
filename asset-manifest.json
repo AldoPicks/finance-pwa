@@ -1,10 +1,20 @@
 {
   "files": {
-    "main.js": "/finance-pwa/static/js/main.6f15c592.js",
+    "main.js": "/finance-pwa/static/js/main.b09bc528.js",
+    "static/js/239.8380e374.chunk.js": "/finance-pwa/static/js/239.8380e374.chunk.js",
+    "static/js/389.46bd084e.chunk.js": "/finance-pwa/static/js/389.46bd084e.chunk.js",
+    "static/js/238.aa804828.chunk.js": "/finance-pwa/static/js/238.aa804828.chunk.js",
+    "static/js/977.d84f6b22.chunk.js": "/finance-pwa/static/js/977.d84f6b22.chunk.js",
+    "static/js/455.c4abd232.chunk.js": "/finance-pwa/static/js/455.c4abd232.chunk.js",
     "index.html": "/finance-pwa/index.html",
-    "main.6f15c592.js.map": "/finance-pwa/static/js/main.6f15c592.js.map"
+    "main.b09bc528.js.map": "/finance-pwa/static/js/main.b09bc528.js.map",
+    "239.8380e374.chunk.js.map": "/finance-pwa/static/js/239.8380e374.chunk.js.map",
+    "389.46bd084e.chunk.js.map": "/finance-pwa/static/js/389.46bd084e.chunk.js.map",
+    "238.aa804828.chunk.js.map": "/finance-pwa/static/js/238.aa804828.chunk.js.map",
+    "977.d84f6b22.chunk.js.map": "/finance-pwa/static/js/977.d84f6b22.chunk.js.map",
+    "455.c4abd232.chunk.js.map": "/finance-pwa/static/js/455.c4abd232.chunk.js.map"
   },
   "entrypoints": [
-    "static/js/main.6f15c592.js"
+    "static/js/main.b09bc528.js"
   ]
 }
