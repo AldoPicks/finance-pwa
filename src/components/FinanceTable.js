@@ -213,22 +213,65 @@ export default function FinanceTable({ readOnly = false }) {
               </TableRow>
             )}
 
-            {/* ── Filas de categorías ── */}
+            {/* ── Filas: categorías → tarjetas (desde rows) → total ── */}
             {rows.filter((row) => row.id !== 'ahorro').map((row) => {
               const totalRow = SEMANAS.reduce((acc, s) => acc + (Number(row[s]) || 0), 0);
               const pct = ingreso > 0 ? ((totalRow / ingreso) * 100).toFixed(1) : '0.0';
-              const isSpecial = row.id === 'total';
+              const isTotal    = row.id === 'total';
+              const isTarjeta  = row.esTarjeta === true;
 
-              return (
+              // ── Fila tarjetas ──────────────────────────────────────────────
+              if (isTarjeta) {
+                return (
+                  <TableRow key="tarjetas"
+                    sx={{ bgcolor: 'rgba(229,57,53,0.04)', '& td': { borderBottom: '1px solid rgba(229,57,53,0.1)' } }}>
+                    <TableCell>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: '#ef5350', flexShrink: 0 }} />
+                        <CreditCard sx={{ fontSize: 14, color: '#ef5350' }} />
+                        <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', color: '#ef5350' }}>
+                          Tarjetas de crédito
+                        </Typography>
+                        <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'DM Mono', fontSize: '0.63rem' }}>
+                          ({cards.length} tarjeta{cards.length !== 1 ? 's' : ''})
+                        </Typography>
+                      </Box>
+                    </TableCell>
+                    {SEMANAS.map((s) => (
+                      <TableCell key={s} align="right">
+                        <Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', color: row[s] > 0 ? '#ef5350' : 'text.disabled' }}>
+                          {row[s] > 0 ? fmt(row[s]) : '—'}
+                        </Typography>
+                      </TableCell>
+                    ))}
+                    <TableCell align="right">
+                      <Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', fontWeight: 700, color: '#ef5350' }}>
+                        {fmt(totalRow)}
+                      </Typography>
+                    </TableCell>
+                    <TableCell align="right">
+                      <Chip label={`${pct}%`} size="small" sx={{ fontFamily: 'DM Mono', fontSize: '0.68rem', height: 20, bgcolor: 'rgba(229,57,53,0.12)', color: '#ef5350' }} />
+                    </TableCell>
+                  </TableRow>
+                );
+              }
+
+              // ── Divisor antes de Total Gastos ──────────────────────────────
+              const divider = isTotal
+                ? <TableRow key="divider"><TableCell colSpan={7} sx={{ py: 0.3, borderBottom: '1px solid rgba(79,195,247,0.15)' }} /></TableRow>
+                : null;
+
+              // ── Fila normal / total ────────────────────────────────────────
+              const mainRow = (
                 <TableRow key={row.id}
-                  sx={{ ...getRowStyle(row), '&:hover td': !isSpecial ? { bgcolor: 'rgba(255,255,255,0.02)' } : {}, '&:last-child td': { border: 0 } }}>
+                  sx={{ ...getRowStyle(row), '&:hover td': !isTotal ? { bgcolor: 'rgba(255,255,255,0.02)' } : {}, '&:last-child td': { border: 0 } }}>
                   <TableCell>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: row.color, flexShrink: 0 }} />
-                      <Typography variant="body2" sx={{ fontFamily: isSpecial ? 'Syne' : 'DM Mono', fontWeight: isSpecial ? 700 : 400, fontSize: '0.82rem', color: isSpecial ? 'text.primary' : 'text.secondary' }}>
+                      <Typography variant="body2" sx={{ fontFamily: isTotal ? 'Syne' : 'DM Mono', fontWeight: isTotal ? 700 : 400, fontSize: '0.82rem', color: isTotal ? 'text.primary' : 'text.secondary' }}>
                         {row.categoria}
                       </Typography>
-                      {!row.editable && <Lock sx={{ fontSize: 11, color: 'text.disabled' }} />}
+                      {!row.editable && !isTotal && <Lock sx={{ fontSize: 11, color: 'text.disabled' }} />}
                     </Box>
                   </TableCell>
                   {SEMANAS.map((s) => (
@@ -238,7 +281,7 @@ export default function FinanceTable({ readOnly = false }) {
                     />
                   ))}
                   <TableCell align="right">
-                    <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', fontWeight: isSpecial ? 700 : 400, color: row.id === 'total' ? '#4fc3f7' : 'text.primary' }}>
+                    <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', fontWeight: isTotal ? 700 : 400, color: isTotal ? '#4fc3f7' : 'text.primary' }}>
                       {fmt(totalRow)}
                     </Typography>
                   </TableCell>
@@ -249,46 +292,11 @@ export default function FinanceTable({ readOnly = false }) {
                   </TableCell>
                 </TableRow>
               );
+
+              return isTotal ? <React.Fragment key={row.id}>{divider}{mainRow}</React.Fragment> : mainRow;
             })}
 
-            {/* ── ✅ Fila tarjetas como categoría (con total en la suma) ── */}
-            {hayCargosTarjetas && (() => {
-              const totalTarjetas = Object.values(cardsCargos).reduce((a, b) => a + b, 0);
-              const pct = ingreso > 0 ? ((totalTarjetas / ingreso) * 100).toFixed(1) : '0.0';
-              return (
-                <TableRow sx={{ bgcolor: 'rgba(229,57,53,0.04)', '& td': { borderBottom: '1px solid rgba(229,57,53,0.1)' } }}>
-                  <TableCell>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: '#ef5350', flexShrink: 0 }} />
-                      <CreditCard sx={{ fontSize: 14, color: '#ef5350' }} />
-                      <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', color: '#ef5350' }}>
-                        Tarjetas de crédito
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'DM Mono', fontSize: '0.63rem' }}>
-                        ({cards.length} tarjeta{cards.length !== 1 ? 's' : ''})
-                      </Typography>
-                    </Box>
-                  </TableCell>
-                  {SEMANAS.map((s) => (
-                    <TableCell key={s} align="right">
-                      <Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', color: cardsCargos[s] > 0 ? '#ef5350' : 'text.disabled' }}>
-                        {cardsCargos[s] > 0 ? fmt(cardsCargos[s]) : '—'}
-                      </Typography>
-                    </TableCell>
-                  ))}
-                  <TableCell align="right">
-                    <Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', fontWeight: 700, color: '#ef5350' }}>
-                      {fmt(totalTarjetas)}
-                    </Typography>
-                  </TableCell>
-                  <TableCell align="right">
-                    <Chip label={`${pct}%`} size="small" sx={{ fontFamily: 'DM Mono', fontSize: '0.68rem', height: 20, bgcolor: 'rgba(229,57,53,0.12)', color: '#ef5350' }} />
-                  </TableCell>
-                </TableRow>
-              );
-            })()}
-
-            {/* Divisor */}
+            {/* Divisor final */}
             <TableRow><TableCell colSpan={7} sx={{ py: 0.3, borderBottom: '1px solid rgba(79,195,247,0.15)' }} /></TableRow>
 
             {/* ── Ahorro semanal ── */}

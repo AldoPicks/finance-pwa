@@ -24,22 +24,26 @@ export function AuthProvider({ children }) {
       if (firebaseUser) {
         setFbUser(firebaseUser);
         try {
-          const profile = await UserService.getProfile(firebaseUser.uid);
+          let profile = await UserService.getProfile(firebaseUser.uid);
           const isNewAccount = !profile || !profile.createdAt;
 
-          // ✅ Solo bloquear acceso si es cuenta nueva sin verificar
-          // Cuentas antiguas (sin verificación) pueden entrar normalmente
           if (isNewAccount && !firebaseUser.emailVerified) {
+            // Cuenta nueva sin verificar — bloquear acceso
             setUser(null);
           } else {
-            setUser(profile || {
-              uid:   firebaseUser.uid,
-              email: firebaseUser.email,
-              name:  firebaseUser.displayName || 'Usuario',
-            });
+            if (!profile) {
+              // ✅ El perfil no existe en Firestore pero el usuario sí está autenticado
+              // (cuenta antigua o creada externamente) — crearlo automáticamente
+              profile = await UserService.createProfile(firebaseUser.uid, {
+                email: firebaseUser.email,
+                name:  firebaseUser.displayName || 'Usuario',
+              });
+            }
+            setUser(profile);
           }
         } catch (e) {
           console.error('Error cargando perfil:', e);
+          // Fallback mínimo para no bloquear el acceso
           setUser({ uid: firebaseUser.uid, email: firebaseUser.email, name: 'Usuario' });
         }
       } else {
@@ -116,14 +120,15 @@ export function AuthProvider({ children }) {
   const updateProfile = async (updates) => {
     if (!user) return;
     const updated = await UserService.updateProfile(user.uid, updates);
-    setUser(updated);
+    // ✅ Si updated es null/undefined (Firestore falló el getDoc), conservar user actual + updates
+    setUser(updated || { ...user, ...updates });
     AuditService.log(user.uid, 'PROFILE_UPDATE', {
       email: user.email, userName: user.name,
       detail: `Campos: ${Object.keys(updates).join(', ')}`,
       before: { name: user.name, currency: user.currency, defaultIncome: user.defaultIncome },
       after:  updates,
     });
-    return updated;
+    return updated || { ...user, ...updates };
   };
 
   const changePassword = async (currentPassword, newPassword) => {

@@ -16,13 +16,16 @@ function diaToSemana(dia) {
   return 's4';
 }
 
-function primerMesCobroCard(fechaStr, diaCorte) {
+function primerMesCobroCard(fechaStr, diaCorte, diaPago) {
   const d         = new Date(fechaStr + 'T12:00:00');
   const diaCompra = d.getDate();
   const mes       = d.getMonth();
   const anio      = d.getFullYear();
   const mesCierre = diaCompra <= diaCorte ? mes : mes + 1;
-  return new Date(anio, mesCierre + 1, 1);
+  // ✅ Si diaPago < diaCorte → el pago cae el mes SIGUIENTE al cierre (ej: corte 25, pago 5)
+  // ✅ Si diaPago >= diaCorte → el pago cae el MISMO mes del cierre (ej: corte 3, pago 23)
+  const mesCobro  = (Number(diaPago) || 1) < (Number(diaCorte) || 25) ? mesCierre + 1 : mesCierre;
+  return new Date(anio, mesCobro, 1);
 }
 
 function calcularCargosTargetasPorSemana(cards, monthKey) {
@@ -32,11 +35,12 @@ function calcularCargosTargetasPorSemana(cards, monthKey) {
 
   cards.forEach((card) => {
     const diaCorte = Number(card.diaCorte) || 25;
-    const semana   = diaToSemana(Number(card.diaPago) || 1);
+    const diaPago  = Number(card.diaPago) || 1;
+    const semana   = diaToSemana(diaPago);
 
     (card.compras || []).forEach((compra) => {
       const meses    = Number(compra.meses) || 1;
-      const inicio   = primerMesCobroCard(compra.fecha, diaCorte);
+      const inicio   = primerMesCobroCard(compra.fecha, diaCorte, diaPago);
       const startIdx = inicio.getFullYear() * 12 + inicio.getMonth();
       if (targetIdx >= startIdx && targetIdx < startIdx + meses) {
         tot[semana] += compra.monto / meses;
@@ -54,9 +58,11 @@ const fmt = (n) =>
   new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(n);
 
 function calcularTotales(rows, income) {
-  const editables = rows.filter((r) => r.editable);
+  // editable=true incluye categorías normales Y la fila de tarjetas (editable:false pero sumable)
+  // Usamos un flag `sumable` para incluir tarjetas en el total sin marcarlas como editables
+  const sumables = rows.filter((r) => r.editable || r.sumable);
   const totales = { s1: 0, s2: 0, s3: 0, s4: 0 };
-  editables.forEach((r) => {
+  sumables.forEach((r) => {
     totales.s1 += Number(r.s1) || 0; totales.s2 += Number(r.s2) || 0;
     totales.s3 += Number(r.s3) || 0; totales.s4 += Number(r.s4) || 0;
   });
@@ -301,7 +307,7 @@ export function FinanceProvider({ children }) {
   const rows = monthData
     ? calcularTotales([
         ...monthData.rows
-          // ✅ Filtrar filas cuya categoría fue eliminada/desactivada
+          // Filtrar filas cuya categoría fue eliminada/desactivada
           .filter((r) => !r.editable || activeCatIds.has(r.id))
           .map((r) => {
             if (r.editable) {
@@ -310,6 +316,19 @@ export function FinanceProvider({ children }) {
             }
             return r;
           }),
+        // ✅ Tarjetas ANTES del total — sumable:true para que calcularTotales las incluya
+        ...(hayCargosTarjetas ? [{
+          id:        'tarjetas',
+          categoria: 'Tarjetas de crédito',
+          s1: Number(cardsCargos.s1) || 0,
+          s2: Number(cardsCargos.s2) || 0,
+          s3: Number(cardsCargos.s3) || 0,
+          s4: Number(cardsCargos.s4) || 0,
+          editable:  false,
+          sumable:   true,
+          color:     '#ef5350',
+          esTarjeta: true,
+        }] : []),
         { id: 'total',  categoria: 'Total Gastos', s1: 0, s2: 0, s3: 0, s4: 0, editable: false, color: '#455a64' },
         { id: 'ahorro', categoria: 'Ahorro',        s1: 0, s2: 0, s3: 0, s4: 0, editable: false, color: '#00897b' },
       ], ingresoTotal)
@@ -317,13 +336,12 @@ export function FinanceProvider({ children }) {
 
   const income = ingresoTotal;
 
-  // ✅ FIX: totalMes sin doble conteo — las tarjetas se suman una sola vez
-  const totalMes = rows
-    .filter((r) => r.editable)
-    .reduce((a, r) =>
-      a + (Number(r.s1) || 0) + (Number(r.s2) || 0)
-        + (Number(r.s3) || 0) + (Number(r.s4) || 0), 0)
-    + Object.values(cardsCargos).reduce((a, v) => a + (Number(v) || 0), 0);
+  // ✅ totalMes leído de la fila 'total' en rows (ya incluye tarjetas via sumable)
+  const totalRow = rows.find((r) => r.id === 'total');
+  const totalMes = totalRow
+    ? (Number(totalRow.s1)||0) + (Number(totalRow.s2)||0)
+      + (Number(totalRow.s3)||0) + (Number(totalRow.s4)||0)
+    : 0;
 
   const ahorroMes   = income - totalMes;
   const pctGastos   = income > 0 ? ((totalMes / income) * 100).toFixed(1) : '0.0';
@@ -375,6 +393,8 @@ export function FinanceProvider({ children }) {
       categories, addCategory, updateCategory, deleteCategory, reactivateCategory,
       // ✅ Saldo disponible por semana
       saldoDisponibleSem,
+      // ✅ Expuesto para que CardsPage pueda forzar refresco del dashboard
+      reload,
     }}>
       {children}
     </FinanceContext.Provider>

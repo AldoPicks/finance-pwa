@@ -89,7 +89,10 @@ export function useExport() {
       const editableRows = rows.filter((r) => r.editable);
 
       const headers = ['Categoría', 'Sem 1', 'Sem 2', 'Sem 3', 'Sem 4', 'Total mes', '% Ingreso'];
-      const tableData = editableRows.map((r) => {
+
+      // ✅ Leer orden desde rows: categorías editables → tarjetas (sumable) → total
+      const sumableRows = rows.filter((r) => r.editable || r.sumable);
+      const tableData = sumableRows.map((r) => {
         const total = (Number(r.s1)||0) + (Number(r.s2)||0) + (Number(r.s3)||0) + (Number(r.s4)||0);
         const pct   = ingreso > 0 ? ((total / ingreso) * 100).toFixed(1) + '%' : '—';
         return [
@@ -103,27 +106,13 @@ export function useExport() {
         ];
       });
 
-      // Fila de tarjetas
-      if (Object.values(cardsCargos).some((v) => v > 0)) {
-        const totalTarjetas = Object.values(cardsCargos).reduce((a, v) => a + (Number(v)||0), 0);
-        const pctT = ingreso > 0 ? ((totalTarjetas / ingreso) * 100).toFixed(1) + '%' : '—';
-        tableData.push([
-          'Tarjetas de crédito',
-          Number(cardsCargos.s1) || 0,
-          Number(cardsCargos.s2) || 0,
-          Number(cardsCargos.s3) || 0,
-          Number(cardsCargos.s4) || 0,
-          totalTarjetas,
-          pctT,
-        ]);
+      // Fila de totales desde la row 'total' (ya calculada en contexto)
+      const totalRow = rows.find((r) => r.id === 'total');
+      if (totalRow) {
+        const tS1 = Number(totalRow.s1)||0, tS2 = Number(totalRow.s2)||0;
+        const tS3 = Number(totalRow.s3)||0, tS4 = Number(totalRow.s4)||0;
+        tableData.push(['TOTAL GASTOS', tS1, tS2, tS3, tS4, tS1+tS2+tS3+tS4, pctGastos + '%']);
       }
-
-      // Fila de totales
-      const totS1 = tableData.reduce((a, r) => a + (Number(r[1])||0), 0);
-      const totS2 = tableData.reduce((a, r) => a + (Number(r[2])||0), 0);
-      const totS3 = tableData.reduce((a, r) => a + (Number(r[3])||0), 0);
-      const totS4 = tableData.reduce((a, r) => a + (Number(r[4])||0), 0);
-      tableData.push(['TOTAL GASTOS', totS1, totS2, totS3, totS4, totS1+totS2+totS3+totS4, pctGastos + '%']);
 
       const wsTabla = XLSX.utils.aoa_to_sheet([
         ['TABLA DE GASTOS — ' + activeMonthLabel.toUpperCase()],

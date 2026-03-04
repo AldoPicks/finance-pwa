@@ -12,6 +12,7 @@ import {
   ShoppingCart, Warning, Percent, Timeline, Receipt,
 } from '@mui/icons-material';
 import { useAuth } from '../context/AuthContext';
+import { useFinance } from '../context/FinanceContext';
 import { AuditService, CardService as CardDB, CARD_COLORS, CARD_NETWORKS } from '../firebase/services';
 import { useNotifications } from '../hooks/useNotifications';
 
@@ -729,6 +730,8 @@ function CardDetail({ card, onEditPurchase, onDeletePurchase }) {
 // ─── Página principal ─────────────────────────────────────────
 export default function CardsPage() {
   const { user } = useAuth();
+  // ✅ reload del contexto para que dashboard se actualice al cambiar tarjetas
+  const { reload: reloadContext } = useFinance();
   const [cards, setCards] = useState([]);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editCard, setEditCard] = useState(null);
@@ -742,11 +745,13 @@ export default function CardsPage() {
 
   const { checkCardPayments } = useNotifications(cards);
 
+  // ✅ loadCards actualiza el estado local Y dispara reload en el contexto (dashboard)
   const loadCards = async () => {
     if (!user) return;
     try {
       const loaded = await CardDB.getAll(user.uid);
       setCards(loaded.map((c) => ({ ...c, compras: c.compras || [], pagos: c.pagos || [] })));
+      reloadContext(); // ← esto refresca cardsCargos en el contexto → dashboard actualizado
     } catch (err) { console.error('Error cargando tarjetas:', err); }
   };
 

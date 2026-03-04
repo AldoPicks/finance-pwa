@@ -134,7 +134,8 @@ export const UserService = {
 
   async updateProfile(uid, updates) {
     const ref = doc(db, 'users', uid);
-    await updateDoc(ref, { ...clean(updates), updatedAt: new Date().toISOString() });
+    // ✅ setDoc con merge:true crea el documento si no existe, y actualiza si ya existe
+    await setDoc(ref, { ...clean(updates), updatedAt: new Date().toISOString() }, { merge: true });
     const snap = await getDoc(ref);
     return snap.data();
   },
