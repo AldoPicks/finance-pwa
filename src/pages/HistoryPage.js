@@ -50,17 +50,17 @@ export default function HistoryPage() {
       .reverse()
       .map((h) => ({
         mes: fromMonthKey(h.monthKey).label.replace(' 20', " '"),
-        Ingresos: h.income,
-        Gastos: h.totalExpenses,
-        Ahorro: Math.max(0, h.savings),
+        Ingresos: Number(h.income) || 0,
+        Gastos:   Number(h.totalExpenses) || 0,
+        Ahorro:   Math.max(0, Number(h.savings) || 0),
       })),
     [history]
   );
 
   // Stats acumuladas
-  const totalAhorro = history.reduce((a, h) => a + Math.max(0, h.savings), 0);
+  const totalAhorro = history.reduce((a, h) => a + Math.max(0, Number(h.savings) || 0), 0);
   const avgSavingsRate = history.length
-    ? (history.reduce((a, h) => a + h.savingsRate, 0) / history.length).toFixed(1)
+    ? (history.reduce((a, h) => a + (Number(h.savingsRate) || 0), 0) / history.length).toFixed(1)
     : 0;
   const bestMonth = history.reduce((best, h) => (!best || h.savings > best.savings ? h : best), null);
 
@@ -160,7 +160,12 @@ export default function HistoryPage() {
             <TableBody>
               {history.map((h, idx) => {
                 const prev = history[idx + 1];
-                const isPositive = h.savings >= 0;
+                // ✅ Normalizar a número para evitar concatenación de strings de Firestore
+                const income        = Number(h.income)        || 0;
+                const totalExpenses = Number(h.totalExpenses) || 0;
+                const savings       = Number(h.savings)       || 0;
+                const savingsRate   = Number(h.savingsRate)   || 0;
+                const isPositive = savings >= 0;
                 return (
                   <TableRow key={h.monthKey} sx={{ '&:last-child td': { border: 0 }, '&:hover td': { bgcolor: 'rgba(79,195,247,0.03)' } }}>
                     <TableCell>
@@ -174,14 +179,14 @@ export default function HistoryPage() {
                       </Box>
                     </TableCell>
                     <TableCell align="right">
-                      <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.8rem' }}>{fmt(h.income)}</Typography>
+                      <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.8rem' }}>{fmt(income)}</Typography>
                     </TableCell>
                     <TableCell align="right">
-                      <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.8rem', color: '#ff5252' }}>{fmt(h.totalExpenses)}</Typography>
+                      <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.8rem', color: '#ff5252' }}>{fmt(totalExpenses)}</Typography>
                     </TableCell>
                     <TableCell align="right">
                       <Typography variant="body2" sx={{ fontFamily: 'DM Mono', fontSize: '0.8rem', color: isPositive ? '#69f0ae' : '#ff5252', fontWeight: 600 }}>
-                        {fmt(h.savings)}
+                        {fmt(savings)}
                       </Typography>
                     </TableCell>
                     <TableCell align="right">
@@ -189,24 +194,24 @@ export default function HistoryPage() {
                         <Box sx={{ width: 60 }}>
                           <LinearProgress
                             variant="determinate"
-                            value={Math.min(100, Math.max(0, h.savingsRate))}
+                            value={Math.min(100, Math.max(0, savingsRate))}
                             sx={{
                               height: 4, borderRadius: 2,
                               bgcolor: 'rgba(255,255,255,0.08)',
                               '& .MuiLinearProgress-bar': {
-                                bgcolor: h.savingsRate >= 20 ? '#69f0ae' : h.savingsRate >= 10 ? '#ffca28' : '#ff5252',
+                                bgcolor: savingsRate >= 20 ? '#69f0ae' : savingsRate >= 10 ? '#ffca28' : '#ff5252',
                                 borderRadius: 2,
                               },
                             }}
                           />
                         </Box>
                         <Typography variant="caption" sx={{ fontFamily: 'DM Mono', color: 'text.secondary', width: 36, textAlign: 'right' }}>
-                          {h.savingsRate}%
+                          {savingsRate.toFixed(1)}%
                         </Typography>
                       </Box>
                     </TableCell>
                     <TableCell align="right">
-                      <TrendIcon current={h.totalExpenses} prev={prev?.totalExpenses} />
+                      <TrendIcon current={totalExpenses} prev={Number(prev?.totalExpenses) || 0} />
                     </TableCell>
                   </TableRow>
                 );

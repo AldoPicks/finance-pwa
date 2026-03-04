@@ -429,14 +429,19 @@ export const MonthService = {
     if (!monthSnap.exists()) return null;
     const month = monthSnap.data();
 
-    const totalExpenses = month.rows.reduce((a, r) => a + r.s1 + r.s2 + r.s3 + r.s4, 0);
-    const savings = month.income - totalExpenses;
-    const savingsRate = month.income > 0 ? parseFloat(((savings / month.income) * 100).toFixed(1)) : 0;
+    // ✅ FIX: Number() en cada celda para evitar concatenación de strings desde Firestore
+    const totalExpenses = month.rows.reduce((a, r) =>
+      a + (Number(r.s1)||0) + (Number(r.s2)||0) + (Number(r.s3)||0) + (Number(r.s4)||0), 0);
+    const income = Number(month.income) || 0;
+    const savings = income - totalExpenses;
+    const savingsRate = income > 0 ? parseFloat(((savings / income) * 100).toFixed(1)) : 0;
     const byCategory = {};
-    month.rows.forEach((r) => { byCategory[r.id] = r.s1 + r.s2 + r.s3 + r.s4; });
+    month.rows.forEach((r) => {
+      byCategory[r.id] = (Number(r.s1)||0) + (Number(r.s2)||0) + (Number(r.s3)||0) + (Number(r.s4)||0);
+    });
     const { label } = fromMonthKey(monthKey);
 
-    const entry = { monthKey, monthLabel: label, income: month.income, totalExpenses, savings, savingsRate, byCategory, snapshotAt: new Date().toISOString() };
+    const entry = { monthKey, monthLabel: label, income, totalExpenses, savings, savingsRate, byCategory, snapshotAt: new Date().toISOString() };
     await setDoc(doc(db, 'users', uid, 'history', monthKey), entry);
     return entry;
   },
