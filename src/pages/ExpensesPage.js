@@ -224,7 +224,7 @@ function ExpenseRow({ expense, category, onEdit, onDelete }) {
       {/* Monto */}
       <TableCell align="right">
         <Typography sx={{ fontFamily: 'DM Mono', fontWeight: 600, fontSize: '0.88rem', color: '#ff8a80' }}>
-          {fmt(expense.monto)}
+          {fmt(Number(expense.monto) || 0)}
         </Typography>
       </TableCell>
 
@@ -297,21 +297,27 @@ export default function ExpensesPage() {
   const filtered = useMemo(() => {
     return expenses.filter((e) => {
       const cat   = categories.find((c) => c.id === e.categoryId);
-      const matchSearch = !search || e.descripcion.toLowerCase().includes(search.toLowerCase()) || cat?.nombre.toLowerCase().includes(search.toLowerCase());
+      const matchSearch = !search || (e.descripcion || '').toLowerCase().includes(search.toLowerCase()) || cat?.nombre.toLowerCase().includes(search.toLowerCase());
       const matchCat  = filterCat  === 'all' || e.categoryId === filterCat;
       const matchWeek = filterWeek === 'all' || String(e.semana) === filterWeek;
       return matchSearch && matchCat && matchWeek;
     });
   }, [expenses, search, filterCat, filterWeek, categories]);
 
-  // Totales por semana
+  // ✅ FIX: forzar Number() para evitar concatenación de strings desde Firestore
   const weekTotals = useMemo(() => {
     const t = { 1: 0, 2: 0, 3: 0, 4: 0 };
-    expenses.forEach((e) => { t[e.semana] = (t[e.semana] || 0) + e.monto; });
+    expenses.forEach((e) => {
+      const semana = Number(e.semana);
+      if (semana >= 1 && semana <= 4) {
+        t[semana] = (t[semana] || 0) + (Number(e.monto) || 0);
+      }
+    });
     return t;
   }, [expenses]);
 
-  const totalFiltered = filtered.reduce((a, e) => a + e.monto, 0);
+  // ✅ FIX: forzar Number() en reduce para evitar concatenación
+  const totalFiltered = filtered.reduce((a, e) => a + (Number(e.monto) || 0), 0);
 
   return (
     <Box>
@@ -461,7 +467,7 @@ export default function ExpensesPage() {
         <DialogTitle sx={{ fontFamily: 'Syne', fontWeight: 800 }}>¿Eliminar gasto?</DialogTitle>
         <DialogContent>
           <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Se eliminará el gasto de <strong style={{ color: '#ff8a80' }}>{fmt(confirmDelete?.monto || 0)}</strong>
+            Se eliminará el gasto de <strong style={{ color: '#ff8a80' }}>{fmt(Number(confirmDelete?.monto) || 0)}</strong>
             {confirmDelete?.descripcion ? ` — "${confirmDelete.descripcion}"` : ''}.
             Esto actualizará los totales de la tabla automáticamente.
           </Typography>

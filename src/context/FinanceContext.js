@@ -317,24 +317,30 @@ export function FinanceProvider({ children }) {
 
   const income = ingresoTotal;
 
-  // ✅ totalMes ahora incluye cargos de tarjetas
-  const totalMes = rows.filter((r) => r.editable).reduce((a, r) => a + r.s1 + r.s2 + r.s3 + r.s4, 0)
-    + Object.values(cardsCargos).reduce((a, v) => a + v, 0);
+  // ✅ FIX: totalMes sin doble conteo — las tarjetas se suman una sola vez
+  const totalMes = rows
+    .filter((r) => r.editable)
+    .reduce((a, r) =>
+      a + (Number(r.s1) || 0) + (Number(r.s2) || 0)
+        + (Number(r.s3) || 0) + (Number(r.s4) || 0), 0)
+    + Object.values(cardsCargos).reduce((a, v) => a + (Number(v) || 0), 0);
 
   const ahorroMes   = income - totalMes;
   const pctGastos   = income > 0 ? ((totalMes / income) * 100).toFixed(1) : '0.0';
-  const carroRow    = monthData?.rows.find((r) => r.id === 'abono_carro');
-  const totalCarro  = carroRow ? carroRow.s1 + carroRow.s2 + carroRow.s3 + carroRow.s4 : 0;
+
+  // ✅ FIX: carroRow leído desde `rows` (ya procesado) en lugar de monthData.rows (datos crudos)
+  const carroRow   = rows.find((r) => r.id === 'abono_carro');
+  const totalCarro = carroRow
+    ? (Number(carroRow.s1) || 0) + (Number(carroRow.s2) || 0)
+      + (Number(carroRow.s3) || 0) + (Number(carroRow.s4) || 0)
+    : 0;
+
   const pctCarro    = income > 0 ? ((totalCarro / income) * 100).toFixed(1) : '0.0';
   const alertaCarro = income > 0 && totalCarro / income > (user?.prefs?.alertThreshold || 50) / 100;
   const { label: activeMonthLabel } = fromMonthKey(activeMonthKey);
   const isCurrentMonth = activeMonthKey === currentMonthKey;
 
   // ✅ Saldo disponible por semana: ingreso_sem + ahorro_sem_anterior
-  // s1: ingreso s1 (no hay semana anterior en el mes)
-  // s2: ingreso s2 + ahorro s1
-  // s3: ingreso s3 + ahorro s2
-  // s4: ingreso s4 + ahorro s3
   const ingresoSemanal = income / 4;
   const ingresoSem = incomes.length > 0
     ? ['s1', 's2', 's3', 's4'].map((s) => ingresosBySemana[s] || 0)
@@ -342,7 +348,7 @@ export function FinanceProvider({ children }) {
 
   const gastoSem = ['s1', 's2', 's3', 's4'].map((s) =>
     rows.filter((r) => r.editable).reduce((acc, r) => acc + (Number(r[s]) || 0), 0)
-    + (cardsCargos[s] || 0)
+    + (Number(cardsCargos[s]) || 0)
   );
   const ahorroSem = ingresoSem.map((ing, i) => ing - gastoSem[i]);
 
