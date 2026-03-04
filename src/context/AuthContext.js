@@ -7,6 +7,7 @@ import {
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
+  sendEmailVerification,
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { UserService, AuditService } from '../firebase/services';
@@ -14,8 +15,8 @@ import { UserService, AuditService } from '../firebase/services';
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user,    setUser]    = useState(null);   // perfil de Firestore
-  const [fbUser,  setFbUser]  = useState(null);   // Firebase Auth user
+  const [user,    setUser]    = useState(null);
+  const [fbUser,  setFbUser]  = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -24,11 +25,19 @@ export function AuthProvider({ children }) {
         setFbUser(firebaseUser);
         try {
           const profile = await UserService.getProfile(firebaseUser.uid);
-          setUser(profile || {
-            uid:   firebaseUser.uid,
-            email: firebaseUser.email,
-            name:  firebaseUser.displayName || 'Usuario',
-          });
+          const isNewAccount = !profile || !profile.createdAt;
+
+          // ✅ Solo bloquear acceso si es cuenta nueva sin verificar
+          // Cuentas antiguas (sin verificación) pueden entrar normalmente
+          if (isNewAccount && !firebaseUser.emailVerified) {
+            setUser(null);
+          } else {
+            setUser(profile || {
+              uid:   firebaseUser.uid,
+              email: firebaseUser.email,
+              name:  firebaseUser.displayName || 'Usuario',
+            });
+          }
         } catch (e) {
           console.error('Error cargando perfil:', e);
           setUser({ uid: firebaseUser.uid, email: firebaseUser.email, name: 'Usuario' });
@@ -43,8 +52,19 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (email, password) => {
-    const cred    = await signInWithEmailAndPassword(auth, email, password);
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+
+    // ✅ Solo bloquear si el perfil ya existe en Firestore Y el correo no está verificado
+    // Esto evita bloquear cuentas antiguas creadas antes de implementar la verificación
     const profile = await UserService.getProfile(cred.user.uid);
+    const isNewAccount = !profile || !profile.createdAt;
+
+    if (isNewAccount && !cred.user.emailVerified) {
+      await signOut(auth);
+      const err = new Error('Debes verificar tu correo electrónico antes de iniciar sesión. Revisa tu bandeja de entrada.');
+      err.code = 'auth/email-not-verified';
+      throw err;
+    }
     AuditService.log(cred.user.uid, 'AUTH_LOGIN', {
       email, userName: profile?.name || '',
       detail: `Login desde ${/Mobi/.test(navigator.userAgent) ? 'móvil' : 'desktop'}`,
@@ -53,14 +73,22 @@ export function AuthProvider({ children }) {
   };
 
   const register = async (email, password, name) => {
-    const cred    = await createUserWithEmailAndPassword(auth, email, password);
-    const profile = await UserService.createProfile(cred.user.uid, { email, name });
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+
+    // ✅ Crear perfil en Firestore aunque el correo no esté verificado aún
+    await UserService.createProfile(cred.user.uid, { email, name });
     AuditService.log(cred.user.uid, 'AUTH_REGISTER', {
       email, userName: name,
-      detail: 'Nueva cuenta creada',
+      detail: 'Nueva cuenta creada — pendiente verificación de correo',
     });
-    setUser(profile);
-    return profile;
+
+    // ✅ Enviar correo de verificación
+    await sendEmailVerification(cred.user);
+
+    // Cerramos sesión para forzar que verifiquen antes de entrar
+    await signOut(auth);
+
+    return { emailSent: true };
   };
 
   const logout = async () => {
@@ -71,6 +99,18 @@ export function AuthProvider({ children }) {
       });
     }
     await signOut(auth);
+  };
+
+  // ✅ Reenviar correo de verificación (por si venció o no llegó)
+  const resendVerificationEmail = async (email, password) => {
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    if (cred.user.emailVerified) {
+      await signOut(auth);
+      throw new Error('Este correo ya fue verificado. Puedes iniciar sesión normalmente.');
+    }
+    await sendEmailVerification(cred.user);
+    await signOut(auth);
+    return true;
   };
 
   const updateProfile = async (updates) => {
@@ -102,6 +142,7 @@ export function AuthProvider({ children }) {
     <AuthContext.Provider value={{
       user, fbUser, loading,
       login, logout, register, updateProfile, changePassword,
+      resendVerificationEmail,
     }}>
       {children}
     </AuthContext.Provider>

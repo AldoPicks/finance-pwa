@@ -3,7 +3,7 @@ import {
   Table, TableBody, TableCell, TableContainer, TableHead, TableRow,
   TextField, Box, Typography, InputAdornment, Tooltip, Chip, Button,
 } from '@mui/material';
-import { Edit, Lock, Add, CreditCard } from '@mui/icons-material';
+import { Edit, Lock, Add, CreditCard, AccountBalanceWallet } from '@mui/icons-material';
 import { useFinance } from '../context/FinanceContext';
 import { useNavigate } from 'react-router-dom';
 
@@ -15,7 +15,7 @@ const fmt = (n) =>
 
 function EditableCell({ value, rowId, semana, editable }) {
   const { updateCell } = useFinance();
-  const [editing, setEditing] = useState(false);
+  const [editing,  setEditing]  = useState(false);
   const [localVal, setLocalVal] = useState(value);
 
   const handleBlur = () => { setEditing(false); updateCell(rowId, semana, localVal); };
@@ -53,7 +53,11 @@ function EditableCell({ value, rowId, semana, editable }) {
 }
 
 export default function FinanceTable({ readOnly = false }) {
-  const { rows, ingreso, incomes, ingresosBySemana, updateIngreso, cards, cardsCargos, hayCargosTarjetas } = useFinance();
+  const {
+    rows, ingreso, incomes, ingresosBySemana, updateIngreso,
+    cards, cardsCargos, hayCargosTarjetas,
+    saldoDisponibleSem,
+  } = useFinance();
   const navigate = useNavigate();
   const [editingIngreso, setEditingIngreso] = useState(false);
   const [localIngreso,   setLocalIngreso]   = useState(ingreso);
@@ -66,20 +70,31 @@ export default function FinanceTable({ readOnly = false }) {
     return {};
   };
 
-  // Ingresos por semana: real si hay registros, o ingreso/4 si es fijo
   const ingresoSemanal = ingreso / 4;
   const ingresoSem = hasIncomes
     ? [ingresosBySemana.s1, ingresosBySemana.s2, ingresosBySemana.s3, ingresosBySemana.s4]
     : [ingresoSemanal, ingresoSemanal, ingresoSemanal, ingresoSemanal];
 
-  const gastoSem    = SEMANAS.map((s) => rows.filter((r) => r.editable).reduce((acc, r) => acc + (Number(r[s]) || 0), 0));
-  const ahorroSem   = ingresoSem.map((ing, i) => ing - gastoSem[i]);
-  const pctGastoSem = ingresoSem.map((ing, i) => ing > 0 ? ((gastoSem[i] / ing) * 100).toFixed(1) : '0.0');
+  // gastoSem incluye tarjetas
+  const gastoSem = SEMANAS.map((s) =>
+    rows.filter((r) => r.editable).reduce((acc, r) => acc + (Number(r[s]) || 0), 0)
+    + (cardsCargos[s] || 0)
+  );
+  const ahorroSem = ingresoSem.map((ing, i) => ing - gastoSem[i]);
+
+  // ✅ % gasto sobre saldo disponible (ingreso sem + ahorro sem anterior)
+  const pctGastoSem = SEMANAS.map((_, i) => {
+    const saldo = saldoDisponibleSem ? saldoDisponibleSem[i] : ingresoSem[i];
+    return saldo > 0 ? ((gastoSem[i] / saldo) * 100).toFixed(1) : '0.0';
+  });
 
   const totalGastoMes  = gastoSem.reduce((a, b) => a + b, 0);
   const totalAhorroMes = ahorroSem.reduce((a, b) => a + b, 0);
   const pctGastoTotal  = ingreso > 0 ? ((totalGastoMes  / ingreso) * 100).toFixed(1) : '0.0';
   const pctAhorroTotal = ingreso > 0 ? ((totalAhorroMes / ingreso) * 100).toFixed(1) : '0.0';
+
+  // Total saldo disponible del mes
+  const totalSaldoDisponible = saldoDisponibleSem ? saldoDisponibleSem.reduce((a, b) => a + b, 0) : 0;
 
   const ahorroColor = (val) => val >= 0 ? '#69f0ae' : '#ff5252';
   const pctColor    = (pct) => Number(pct) > 80 ? '#ff5252' : Number(pct) > 60 ? '#ffca28' : '#69f0ae';
@@ -100,8 +115,7 @@ export default function FinanceTable({ readOnly = false }) {
           </Box>
         ) : readOnly ? (
           <Chip label={`${fmt(ingreso)} MXN`}
-            sx={{ fontFamily: 'DM Mono', fontWeight: 500, bgcolor: 'rgba(79,195,247,0.1)', color: '#4fc3f7', border: '1px solid rgba(79,195,247,0.3)' }}
-          />
+            sx={{ fontFamily: 'DM Mono', fontWeight: 500, bgcolor: 'rgba(79,195,247,0.1)', color: '#4fc3f7', border: '1px solid rgba(79,195,247,0.3)' }} />
         ) : (
           editingIngreso ? (
             <TextField autoFocus size="small" value={localIngreso}
@@ -138,7 +152,7 @@ export default function FinanceTable({ readOnly = false }) {
           </TableHead>
           <TableBody>
 
-            {/* Fila ingresos por semana (solo si hay ingresos variables) */}
+            {/* ── Fila ingresos por semana ── */}
             {hasIncomes && (
               <TableRow sx={{ bgcolor: 'rgba(105,240,174,0.04)', '& td': { borderBottom: '1px solid rgba(105,240,174,0.1)' } }}>
                 <TableCell>
@@ -163,7 +177,43 @@ export default function FinanceTable({ readOnly = false }) {
               </TableRow>
             )}
 
-            {/* Filas de categorías (sin ahorro) */}
+            {/* ── ✅ Fila Saldo Disponible ── */}
+            {saldoDisponibleSem && (
+              <TableRow sx={{ bgcolor: 'rgba(79,195,247,0.04)', '& td': { borderBottom: '1px solid rgba(79,195,247,0.1)' } }}>
+                <TableCell>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <Box sx={{ width: 3, height: 16, borderRadius: 2, bgcolor: '#4fc3f7', flexShrink: 0 }} />
+                    <AccountBalanceWallet sx={{ fontSize: 14, color: '#4fc3f7' }} />
+                    <Typography variant="body2" sx={{ fontFamily: 'Syne', fontWeight: 700, fontSize: '0.82rem', color: '#4fc3f7' }}>
+                      Saldo disponible
+                    </Typography>
+                    <Tooltip title="Ingreso de la semana + ahorro de la semana anterior" arrow placement="top">
+                      <Typography variant="caption" sx={{ color: 'text.disabled', fontFamily: 'DM Mono', fontSize: '0.63rem', cursor: 'help' }}>
+                        ⓘ
+                      </Typography>
+                    </Tooltip>
+                  </Box>
+                </TableCell>
+                {saldoDisponibleSem.map((saldo, i) => (
+                  <TableCell key={i} align="right">
+                    <Typography sx={{
+                      fontFamily: 'DM Mono', fontSize: '0.82rem', fontWeight: 600,
+                      color: saldo > 0 ? '#4fc3f7' : '#ff5252',
+                    }}>
+                      {fmt(saldo)}
+                    </Typography>
+                  </TableCell>
+                ))}
+                <TableCell align="right">
+                  <Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', fontWeight: 700, color: '#4fc3f7' }}>
+                    {fmt(totalSaldoDisponible)}
+                  </Typography>
+                </TableCell>
+                <TableCell />
+              </TableRow>
+            )}
+
+            {/* ── Filas de categorías ── */}
             {rows.filter((row) => row.id !== 'ahorro').map((row) => {
               const totalRow = SEMANAS.reduce((acc, s) => acc + (Number(row[s]) || 0), 0);
               const pct = ingreso > 0 ? ((totalRow / ingreso) * 100).toFixed(1) : '0.0';
@@ -183,10 +233,7 @@ export default function FinanceTable({ readOnly = false }) {
                   </TableCell>
                   {SEMANAS.map((s) => (
                     <EditableCell
-                      key={s}
-                      rowId={row.id}
-                      semana={s}
-                      value={row[s]}
+                      key={s} rowId={row.id} semana={s} value={row[s]}
                       editable={readOnly ? false : row.editable}
                     />
                   ))}
@@ -204,7 +251,7 @@ export default function FinanceTable({ readOnly = false }) {
               );
             })}
 
-            {/* Fila tarjetas de crédito (automática) */}
+            {/* ── ✅ Fila tarjetas como categoría (con total en la suma) ── */}
             {hayCargosTarjetas && (() => {
               const totalTarjetas = Object.values(cardsCargos).reduce((a, b) => a + b, 0);
               const pct = ingreso > 0 ? ((totalTarjetas / ingreso) * 100).toFixed(1) : '0.0';
@@ -222,7 +269,7 @@ export default function FinanceTable({ readOnly = false }) {
                       </Typography>
                     </Box>
                   </TableCell>
-                  {['s1','s2','s3','s4'].map((s) => (
+                  {SEMANAS.map((s) => (
                     <TableCell key={s} align="right">
                       <Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.82rem', color: cardsCargos[s] > 0 ? '#ef5350' : 'text.disabled' }}>
                         {cardsCargos[s] > 0 ? fmt(cardsCargos[s]) : '—'}
@@ -244,7 +291,7 @@ export default function FinanceTable({ readOnly = false }) {
             {/* Divisor */}
             <TableRow><TableCell colSpan={7} sx={{ py: 0.3, borderBottom: '1px solid rgba(79,195,247,0.15)' }} /></TableRow>
 
-            {/* Ahorro semanal */}
+            {/* ── Ahorro semanal ── */}
             <TableRow sx={{ bgcolor: 'rgba(105,240,174,0.04)' }}>
               <TableCell>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -276,7 +323,7 @@ export default function FinanceTable({ readOnly = false }) {
               </TableCell>
             </TableRow>
 
-            {/* % gasto por semana */}
+            {/* ── % gasto por semana ── */}
             <TableRow sx={{ bgcolor: 'rgba(79,195,247,0.02)', '& td': { border: 0 } }}>
               <TableCell>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

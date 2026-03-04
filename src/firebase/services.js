@@ -23,29 +23,29 @@ import { db } from './config';
 // ─── HELPERS ─────────────────────────────────────────────────
 
 export const MONTH_NAMES = [
-  'Enero','Febrero','Marzo','Abril','Mayo','Junio',
-  'Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre',
+  'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+  'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre',
 ];
 
 export function toMonthKey(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}`;
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
 
 export function fromMonthKey(key) {
   const [year, month] = key.split('-').map(Number);
-  return { year, month, label: `${MONTH_NAMES[month-1]} ${year}` };
+  return { year, month, label: `${MONTH_NAMES[month - 1]} ${year}` };
 }
 
 export function offsetMonth(key, delta) {
   const [year, month] = key.split('-').map(Number);
-  return toMonthKey(new Date(year, month-1+delta, 1));
+  return toMonthKey(new Date(year, month - 1 + delta, 1));
 }
 
 export function getCurrentMonthKey() { return toMonthKey(new Date()); }
 
 export function dateToWeek(dateStr) {
   const day = new Date(dateStr + 'T12:00:00').getDate();
-  if (day <= 7)  return 1;
+  if (day <= 7) return 1;
   if (day <= 14) return 2;
   if (day <= 21) return 3;
   return 4;
@@ -60,42 +60,42 @@ function clean(obj) {
 // ─── CONSTANTES ──────────────────────────────────────────────
 
 export const DEFAULT_CATEGORIES = [
-  { id:'gastos_semanales', nombre:'Gastos semanales',     color:'#1e88e5', icono:'🛒', activa:true },
-  { id:'gastos_finde',     nombre:'Gastos fin de semana', color:'#43a047', icono:'🎉', activa:true },
-  { id:'abono_carro',      nombre:'Abono carro',          color:'#e53935', icono:'🚗', activa:true },
-  { id:'aporte_casa',      nombre:'Aporte casa',          color:'#fb8c00', icono:'🏠', activa:true },
-  { id:'internet',         nombre:'Internet',             color:'#8e24aa', icono:'📡', activa:true },
+  { id: 'gastos_semanales', nombre: 'Gastos semanales', color: '#1e88e5', icono: '🛒', activa: true },
+  { id: 'gastos_finde', nombre: 'Gastos fin de semana', color: '#43a047', icono: '🎉', activa: true },
+  { id: 'abono_carro', nombre: 'Abono carro', color: '#e53935', icono: '🚗', activa: true },
+  { id: 'aporte_casa', nombre: 'Aporte casa', color: '#fb8c00', icono: '🏠', activa: true },
+  { id: 'internet', nombre: 'Internet', color: '#8e24aa', icono: '📡', activa: true },
 ];
 
 export const DEFAULT_BUDGETS = {
-  gastos_semanales: { s1:500,  s2:500, s3:500, s4:500 },
-  gastos_finde:     { s1:300,  s2:300, s3:300, s4:300 },
-  abono_carro:      { s1:1200, s2:0,   s3:0,   s4:0   },
-  aporte_casa:      { s1:1500, s2:0,   s3:0,   s4:0   },
-  internet:         { s1:350,  s2:0,   s3:0,   s4:0   },
+  gastos_semanales: { s1: 500, s2: 500, s3: 500, s4: 500 },
+  gastos_finde: { s1: 300, s2: 300, s3: 300, s4: 300 },
+  abono_carro: { s1: 1200, s2: 0, s3: 0, s4: 0 },
+  aporte_casa: { s1: 1500, s2: 0, s3: 0, s4: 0 },
+  internet: { s1: 350, s2: 0, s3: 0, s4: 0 },
 };
 
 export const COLOR_OPTIONS = [
-  '#1e88e5','#43a047','#e53935','#fb8c00','#8e24aa',
-  '#00897b','#f4511e','#039be5','#7cb342','#e91e63',
-  '#3949ab','#00acc1','#ffb300','#6d4c41','#546e7a',
+  '#1e88e5', '#43a047', '#e53935', '#fb8c00', '#8e24aa',
+  '#00897b', '#f4511e', '#039be5', '#7cb342', '#e91e63',
+  '#3949ab', '#00acc1', '#ffb300', '#6d4c41', '#546e7a',
 ];
 
 export const ICON_OPTIONS = [
-  '🛒','🍔','🚗','🏠','📡','🎉','💊','✈️','🎓','👕',
-  '⚡','💧','🍽️','🎬','🏃','💼','🐾','🌿','🛠️','💈',
+  '🛒', '🍔', '🚗', '🏠', '📡', '🎉', '💊', '✈️', '🎓', '👕',
+  '⚡', '💧', '🍽️', '🎬', '🏃', '💼', '🐾', '🌿', '🛠️', '💈',
 ];
 
-export const CARD_COLORS   = ['#1a237e','#0d47a1','#006064','#1b5e20','#4a148c','#b71c1c','#e65100','#212121','#37474f','#880e4f'];
-export const CARD_NETWORKS = ['visa','mastercard','amex','carnet'];
+export const CARD_COLORS = ['#1a237e', '#0d47a1', '#006064', '#1b5e20', '#4a148c', '#b71c1c', '#e65100', '#212121', '#37474f', '#880e4f'];
+export const CARD_NETWORKS = ['visa', 'mastercard', 'amex', 'carnet'];
 
 export const INCOME_TYPES = [
-  { id:'salario',    label:'Salario / Nómina',   icono:'💼', color:'#4fc3f7' },
-  { id:'freelance',  label:'Freelance',           icono:'💻', color:'#69f0ae' },
-  { id:'bono',       label:'Bono / Comisión',     icono:'🎯', color:'#ffca28' },
-  { id:'venta',      label:'Venta',               icono:'🏷️', color:'#fb8c00' },
-  { id:'transferencia', label:'Transferencia',    icono:'💸', color:'#ce93d8' },
-  { id:'otro',       label:'Otro',                icono:'➕', color:'#90caf9' },
+  { id: 'salario', label: 'Salario / Nómina', icono: '💼', color: '#4fc3f7' },
+  { id: 'freelance', label: 'Freelance', icono: '💻', color: '#69f0ae' },
+  { id: 'bono', label: 'Bono / Comisión', icono: '🎯', color: '#ffca28' },
+  { id: 'venta', label: 'Venta', icono: '🏷️', color: '#fb8c00' },
+  { id: 'transferencia', label: 'Transferencia', icono: '💸', color: '#ce93d8' },
+  { id: 'otro', label: 'Otro', icono: '➕', color: '#90caf9' },
 ];
 
 // ─── USER SERVICE ─────────────────────────────────────────────
@@ -110,15 +110,15 @@ export const UserService = {
     const now = new Date().toISOString();
     const profile = {
       uid, email, name,
-      avatar:        name.charAt(0).toUpperCase(),
-      currency:      'MXN',
+      avatar: name.charAt(0).toUpperCase(),
+      currency: 'MXN',
       defaultIncome: 10000,
-      createdAt:     now,
-      updatedAt:     now,
+      createdAt: now,
+      updatedAt: now,
       prefs: {
-        theme:          'dark',
-        showUSD:        true,
-        alertCarro:     true,
+        theme: 'dark',
+        showUSD: true,
+        alertCarro: true,
         alertThreshold: 50,
       },
     };
@@ -213,11 +213,11 @@ export const IncomeService = {
     const semana = dateToWeek(fecha);
     const data = {
       uid, monthKey, semana,
-      monto:       Number(monto) || 0,
+      monto: Number(monto) || 0,
       descripcion: descripcion?.trim() || '',
-      tipo:        tipo || 'otro',
+      tipo: tipo || 'otro',
       fecha,
-      createdAt:   new Date().toISOString(),
+      createdAt: new Date().toISOString(),
     };
     const ref = await addDoc(collection(db, 'users', uid, 'incomes'), data);
     await IncomeService.syncMonthIncome(uid, monthKey);
@@ -240,9 +240,9 @@ export const IncomeService = {
 
   async syncMonthIncome(uid, monthKey) {
     const incomes = await IncomeService.getByMonth(uid, monthKey);
-    const total   = incomes.reduce((a, i) => a + (Number(i.monto) || 0), 0);
-    const ref     = doc(db, 'users', uid, 'months', monthKey);
-    const snap    = await getDoc(ref);
+    const total = incomes.reduce((a, i) => a + (Number(i.monto) || 0), 0);
+    const ref = doc(db, 'users', uid, 'months', monthKey);
+    const snap = await getDoc(ref);
     if (snap.exists()) {
       await updateDoc(ref, { income: total, updatedAt: new Date().toISOString() });
     }
@@ -288,11 +288,11 @@ export const ExpenseService = {
     const semana = dateToWeek(fecha);
     const data = {
       categoryId,
-      monto:       Number(monto) || 0,
+      monto: Number(monto) || 0,
       descripcion: descripcion?.trim() || '',
       fecha, semana, monthKey, uid,
-      createdAt:   new Date().toISOString(),
-      updatedAt:   new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     };
     const ref = await addDoc(collection(db, 'users', uid, 'expenses'), data);
     await MonthService.syncFromExpenses(uid, monthKey);
@@ -315,32 +315,98 @@ export const ExpenseService = {
 };
 
 // ─── MONTH SERVICE ────────────────────────────────────────────
+// Reemplaza el MonthService completo en services.js
 
 export const MonthService = {
-  async getOrCreate(uid, monthKey, categories, defaultIncome = 10000) {
-    const ref  = doc(db, 'users', uid, 'months', monthKey);
-    const snap = await getDoc(ref);
-    if (snap.exists()) return snap.data();
 
-    const now  = new Date().toISOString();
+  async getOrCreate(uid, monthKey, categories, defaultIncome = 10000) {
+    const ref = doc(db, 'users', uid, 'months', monthKey);
+    const snap = await getDoc(ref);
+
+    if (snap.exists()) {
+      const month = snap.data();
+      // ✅ Al cargar un mes existente, eliminar rows de categorías inactivas/eliminadas
+      const activeCatIds = new Set(categories.filter((c) => c.activa).map((c) => c.id));
+      const filteredRows = month.rows.filter((r) => !r.editable || activeCatIds.has(r.id));
+      if (filteredRows.length !== month.rows.length) {
+        // Hay rows huérfanas — limpiar en Firestore silenciosamente
+        await updateDoc(ref, { rows: filteredRows, updatedAt: new Date().toISOString() });
+        return { ...month, rows: filteredRows };
+      }
+      return month;
+    }
+
+    const now = new Date().toISOString();
+    // ✅ Solo incluir categorías activas al crear el mes
     const rows = categories
       .filter((c) => c.activa)
       .map((c) => {
-        const b = DEFAULT_BUDGETS[c.id] || { s1:0, s2:0, s3:0, s4:0 };
+        const b = DEFAULT_BUDGETS[c.id] || { s1: 0, s2: 0, s3: 0, s4: 0 };
         return { id: c.id, categoria: c.nombre, color: c.color, editable: true, ...b };
       });
 
     const newMonth = {
       monthKey, uid,
-      income:    defaultIncome,
+      income: defaultIncome,
       rows,
-      notes:     '',
-      closed:    false,
+      notes: '',
+      closed: false,
       createdAt: now,
       updatedAt: now,
     };
     await setDoc(ref, newMonth);
     return newMonth;
+  },
+
+  async syncFromExpenses(uid, monthKey) {
+    const q = query(
+      collection(db, 'users', uid, 'expenses'),
+      where('monthKey', '==', monthKey)
+    );
+    const expSnap = await getDocs(q);
+    const expenses = expSnap.docs.map((d) => d.data());
+
+    const monthRef = doc(db, 'users', uid, 'months', monthKey);
+    const monthSnap = await getDoc(monthRef);
+    if (!monthSnap.exists()) return;
+    const month = monthSnap.data();
+
+    // Obtener categorías para saber cuáles están activas
+    const catsSnap = await getDocs(collection(db, 'users', uid, 'categories'));
+    const catsMap = {};
+    catsSnap.docs.forEach((d) => { catsMap[d.id] = { id: d.id, ...d.data() }; });
+
+    const totals = {};
+    expenses.forEach((e) => {
+      if (!totals[e.categoryId]) totals[e.categoryId] = { s1: 0, s2: 0, s3: 0, s4: 0 };
+      totals[e.categoryId][`s${e.semana}`] += e.monto;
+    });
+
+    const updatedRows = month.rows
+      // ✅ Filtrar filas de categorías que ya no están activas
+      .filter((r) => !r.editable || (catsMap[r.id] && catsMap[r.id].activa))
+      .map((r) => {
+        const t = totals[r.id];
+        return t ? { ...r, s1: t.s1, s2: t.s2, s3: t.s3, s4: t.s4 }
+          : { ...r, s1: 0, s2: 0, s3: 0, s4: 0 };
+      });
+
+    const existingIds = new Set(updatedRows.map((r) => r.id));
+
+    // ✅ Solo agregar categorías nuevas si están activas
+    Object.keys(totals).forEach((catId) => {
+      if (!existingIds.has(catId) && catsMap[catId] && catsMap[catId].activa) {
+        const cat = catsMap[catId];
+        const t = totals[catId];
+        updatedRows.push({
+          id: catId, categoria: cat.nombre, color: cat.color, editable: true,
+          s1: t.s1, s2: t.s2, s3: t.s3, s4: t.s4,
+        });
+      }
+    });
+
+    await updateDoc(monthRef, { rows: updatedRows, updatedAt: new Date().toISOString() });
+    return { ...month, rows: updatedRows };
   },
 
   async save(uid, monthKey, data) {
@@ -357,58 +423,17 @@ export const MonthService = {
     return snap.data();
   },
 
-  async syncFromExpenses(uid, monthKey) {
-    const q = query(
-      collection(db, 'users', uid, 'expenses'),
-      where('monthKey', '==', monthKey)
-    );
-    const expSnap  = await getDocs(q);
-    const expenses = expSnap.docs.map((d) => d.data());
-
-    const monthRef  = doc(db, 'users', uid, 'months', monthKey);
-    const monthSnap = await getDoc(monthRef);
-    if (!monthSnap.exists()) return;
-    const month = monthSnap.data();
-
-    const totals = {};
-    expenses.forEach((e) => {
-      if (!totals[e.categoryId]) totals[e.categoryId] = { s1:0, s2:0, s3:0, s4:0 };
-      totals[e.categoryId][`s${e.semana}`] += e.monto;
-    });
-
-    const updatedRows = month.rows.map((r) => {
-      const t = totals[r.id];
-      return t ? { ...r, s1:t.s1, s2:t.s2, s3:t.s3, s4:t.s4 } : { ...r, s1:0, s2:0, s3:0, s4:0 };
-    });
-
-    const existingIds = new Set(updatedRows.map((r) => r.id));
-    const catsSnap    = await getDocs(collection(db, 'users', uid, 'categories'));
-    const catsMap     = {};
-    catsSnap.docs.forEach((d) => { catsMap[d.id] = { id: d.id, ...d.data() }; });
-
-    Object.keys(totals).forEach((catId) => {
-      if (!existingIds.has(catId) && catsMap[catId]) {
-        const cat = catsMap[catId];
-        const t   = totals[catId];
-        updatedRows.push({ id:catId, categoria:cat.nombre, color:cat.color, editable:true, s1:t.s1, s2:t.s2, s3:t.s3, s4:t.s4 });
-      }
-    });
-
-    await updateDoc(monthRef, { rows: updatedRows, updatedAt: new Date().toISOString() });
-    return { ...month, rows: updatedRows };
-  },
-
   async snapshot(uid, monthKey) {
     const monthSnap = await getDoc(doc(db, 'users', uid, 'months', monthKey));
     if (!monthSnap.exists()) return null;
     const month = monthSnap.data();
 
-    const totalExpenses = month.rows.reduce((a,r) => a+r.s1+r.s2+r.s3+r.s4, 0);
-    const savings       = month.income - totalExpenses;
-    const savingsRate   = month.income > 0 ? parseFloat(((savings/month.income)*100).toFixed(1)) : 0;
-    const byCategory    = {};
-    month.rows.forEach((r) => { byCategory[r.id] = r.s1+r.s2+r.s3+r.s4; });
-    const { label }     = fromMonthKey(monthKey);
+    const totalExpenses = month.rows.reduce((a, r) => a + r.s1 + r.s2 + r.s3 + r.s4, 0);
+    const savings = month.income - totalExpenses;
+    const savingsRate = month.income > 0 ? parseFloat(((savings / month.income) * 100).toFixed(1)) : 0;
+    const byCategory = {};
+    month.rows.forEach((r) => { byCategory[r.id] = r.s1 + r.s2 + r.s3 + r.s4; });
+    const { label } = fromMonthKey(monthKey);
 
     const entry = { monthKey, monthLabel: label, income: month.income, totalExpenses, savings, savingsRate, byCategory, snapshotAt: new Date().toISOString() };
     await setDoc(doc(db, 'users', uid, 'history', monthKey), entry);
@@ -429,22 +454,22 @@ export const AuditService = {
   async log(uid, action, opts = {}) {
     const actionMeta = AUDIT_ACTIONS[action] || { label: action, icon: '📝', module: 'Unknown', severity: 'info' };
     const entry = {
-      timestamp:  new Date().toISOString(),
+      timestamp: new Date().toISOString(),
       action,
-      label:      actionMeta.label,
-      icon:       actionMeta.icon,
-      module:     actionMeta.module,
-      severity:   actionMeta.severity,
-      uid:        uid || 'anonymous',
-      email:      opts.email    || '',
-      userName:   opts.userName || '',
-      detail:     opts.detail   || '',
-      monthKey:   opts.monthKey || null,
-      before:     opts.before !== undefined ? JSON.stringify(opts.before) : null,
-      after:      opts.after  !== undefined ? JSON.stringify(opts.after)  : null,
-      device:     /Mobi|Android/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop',
-      browser:    getBrowser(),
-      url:        window.location.pathname,
+      label: actionMeta.label,
+      icon: actionMeta.icon,
+      module: actionMeta.module,
+      severity: actionMeta.severity,
+      uid: uid || 'anonymous',
+      email: opts.email || '',
+      userName: opts.userName || '',
+      detail: opts.detail || '',
+      monthKey: opts.monthKey || null,
+      before: opts.before !== undefined ? JSON.stringify(opts.before) : null,
+      after: opts.after !== undefined ? JSON.stringify(opts.after) : null,
+      device: /Mobi|Android/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop',
+      browser: getBrowser(),
+      url: window.location.pathname,
     };
 
     addDoc(collection(db, 'users', uid, 'audit'), clean(entry)).catch(console.error);
@@ -453,7 +478,7 @@ export const AuditService = {
       const localLogs = JSON.parse(localStorage.getItem('fp_audit_local') || '[]');
       localLogs.unshift(entry);
       localStorage.setItem('fp_audit_local', JSON.stringify(localLogs.slice(0, 200)));
-    } catch {}
+    } catch { }
 
     return entry;
   },
@@ -469,24 +494,24 @@ export const AuditService = {
   },
 
   exportCSV(logs) {
-    const headers = ['Fecha','Hora','Módulo','Acción','Usuario','Email','Detalle','Severidad','Dispositivo','Navegador','URL'];
+    const headers = ['Fecha', 'Hora', 'Módulo', 'Acción', 'Usuario', 'Email', 'Detalle', 'Severidad', 'Dispositivo', 'Navegador', 'URL'];
     const rows = logs.map((l) => {
       const [date, time] = (l.timestamp || '').split('T');
       return [date, time?.split('.')[0], l.module, l.label, l.userName, l.email, l.detail, l.severity, l.device, l.browser, l.url]
-        .map((v) => `"${String(v||'').replace(/"/g,'""')}"`);
+        .map((v) => `"${String(v || '').replace(/"/g, '""')}"`);
     });
-    const csv  = [headers, ...rows].map((r) => r.join(',')).join('\n');
-    const blob = new Blob(['\uFEFF'+csv], { type:'text/csv;charset=utf-8;' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
+    const csv = [headers, ...rows].map((r) => r.join(',')).join('\n');
+    const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
     a.href = url; a.download = `finanzaspro-logs-${new Date().toISOString().split('T')[0]}.csv`;
     a.click(); URL.revokeObjectURL(url);
   },
 
   exportJSON(logs) {
-    const blob = new Blob([JSON.stringify(logs, null, 2)], { type:'application/json' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
+    const blob = new Blob([JSON.stringify(logs, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
     a.href = url; a.download = `finanzaspro-logs-${new Date().toISOString().split('T')[0]}.json`;
     a.click(); URL.revokeObjectURL(url);
   },
@@ -502,31 +527,31 @@ function getBrowser() {
 }
 
 export const AUDIT_ACTIONS = {
-  AUTH_LOGIN:           { label:'Inicio de sesión',         icon:'🔐', module:'Auth',       severity:'info'    },
-  AUTH_LOGOUT:          { label:'Cierre de sesión',         icon:'👋', module:'Auth',       severity:'info'    },
-  AUTH_REGISTER:        { label:'Registro de cuenta',       icon:'✅', module:'Auth',       severity:'success' },
-  AUTH_CHANGE_PASSWORD: { label:'Contraseña cambiada',      icon:'🔑', module:'Auth',       severity:'warning' },
-  AUTH_LOGIN_FAILED:    { label:'Login fallido',            icon:'❌', module:'Auth',       severity:'error'   },
-  FINANCE_INCOME_EDIT:  { label:'Ingreso mensual editado',  icon:'💰', module:'Finanzas',   severity:'info'    },
-  FINANCE_CELL_EDIT:    { label:'Celda de tabla editada',   icon:'✏️', module:'Finanzas',   severity:'info'    },
-  FINANCE_SNAPSHOT:     { label:'Snapshot guardado',        icon:'📸', module:'Finanzas',   severity:'success' },
-  INCOME_CREATE:        { label:'Ingreso registrado',       icon:'💵', module:'Ingresos',   severity:'success' },
-  INCOME_EDIT:          { label:'Ingreso editado',          icon:'✏️', module:'Ingresos',   severity:'info'    },
-  INCOME_DELETE:        { label:'Ingreso eliminado',        icon:'🗑️', module:'Ingresos',   severity:'warning' },
-  EXPENSE_CREATE:       { label:'Gasto registrado',         icon:'➕', module:'Gastos',     severity:'success' },
-  EXPENSE_EDIT:         { label:'Gasto editado',            icon:'✏️', module:'Gastos',     severity:'info'    },
-  EXPENSE_DELETE:       { label:'Gasto eliminado',          icon:'🗑️', module:'Gastos',     severity:'warning' },
-  CATEGORY_CREATE:      { label:'Categoría creada',         icon:'🏷️', module:'Categorías', severity:'success' },
-  CATEGORY_EDIT:        { label:'Categoría editada',        icon:'✏️', module:'Categorías', severity:'info'    },
-  CATEGORY_DELETE:      { label:'Categoría eliminada',      icon:'🗑️', module:'Categorías', severity:'warning' },
-  CATEGORY_REACTIVATE:  { label:'Categoría reactivada',     icon:'♻️', module:'Categorías', severity:'info'    },
-  CARD_CREATE:          { label:'Tarjeta agregada',         icon:'💳', module:'Tarjetas',   severity:'success' },
-  CARD_EDIT:            { label:'Tarjeta editada',          icon:'✏️', module:'Tarjetas',   severity:'info'    },
-  CARD_DELETE:          { label:'Tarjeta eliminada',        icon:'🗑️', module:'Tarjetas',   severity:'warning' },
-  CARD_PAYMENT:         { label:'Pago registrado',          icon:'💸', module:'Tarjetas',   severity:'success' },
-  PROFILE_UPDATE:       { label:'Perfil actualizado',       icon:'👤', module:'Perfil',     severity:'info'    },
-  PROFILE_THEME:        { label:'Tema cambiado',            icon:'🎨', module:'Perfil',     severity:'info'    },
-  SYSTEM_ERROR:         { label:'Error del sistema',        icon:'💥', module:'Sistema',    severity:'error'   },
+  AUTH_LOGIN: { label: 'Inicio de sesión', icon: '🔐', module: 'Auth', severity: 'info' },
+  AUTH_LOGOUT: { label: 'Cierre de sesión', icon: '👋', module: 'Auth', severity: 'info' },
+  AUTH_REGISTER: { label: 'Registro de cuenta', icon: '✅', module: 'Auth', severity: 'success' },
+  AUTH_CHANGE_PASSWORD: { label: 'Contraseña cambiada', icon: '🔑', module: 'Auth', severity: 'warning' },
+  AUTH_LOGIN_FAILED: { label: 'Login fallido', icon: '❌', module: 'Auth', severity: 'error' },
+  FINANCE_INCOME_EDIT: { label: 'Ingreso mensual editado', icon: '💰', module: 'Finanzas', severity: 'info' },
+  FINANCE_CELL_EDIT: { label: 'Celda de tabla editada', icon: '✏️', module: 'Finanzas', severity: 'info' },
+  FINANCE_SNAPSHOT: { label: 'Snapshot guardado', icon: '📸', module: 'Finanzas', severity: 'success' },
+  INCOME_CREATE: { label: 'Ingreso registrado', icon: '💵', module: 'Ingresos', severity: 'success' },
+  INCOME_EDIT: { label: 'Ingreso editado', icon: '✏️', module: 'Ingresos', severity: 'info' },
+  INCOME_DELETE: { label: 'Ingreso eliminado', icon: '🗑️', module: 'Ingresos', severity: 'warning' },
+  EXPENSE_CREATE: { label: 'Gasto registrado', icon: '➕', module: 'Gastos', severity: 'success' },
+  EXPENSE_EDIT: { label: 'Gasto editado', icon: '✏️', module: 'Gastos', severity: 'info' },
+  EXPENSE_DELETE: { label: 'Gasto eliminado', icon: '🗑️', module: 'Gastos', severity: 'warning' },
+  CATEGORY_CREATE: { label: 'Categoría creada', icon: '🏷️', module: 'Categorías', severity: 'success' },
+  CATEGORY_EDIT: { label: 'Categoría editada', icon: '✏️', module: 'Categorías', severity: 'info' },
+  CATEGORY_DELETE: { label: 'Categoría eliminada', icon: '🗑️', module: 'Categorías', severity: 'warning' },
+  CATEGORY_REACTIVATE: { label: 'Categoría reactivada', icon: '♻️', module: 'Categorías', severity: 'info' },
+  CARD_CREATE: { label: 'Tarjeta agregada', icon: '💳', module: 'Tarjetas', severity: 'success' },
+  CARD_EDIT: { label: 'Tarjeta editada', icon: '✏️', module: 'Tarjetas', severity: 'info' },
+  CARD_DELETE: { label: 'Tarjeta eliminada', icon: '🗑️', module: 'Tarjetas', severity: 'warning' },
+  CARD_PAYMENT: { label: 'Pago registrado', icon: '💸', module: 'Tarjetas', severity: 'success' },
+  PROFILE_UPDATE: { label: 'Perfil actualizado', icon: '👤', module: 'Perfil', severity: 'info' },
+  PROFILE_THEME: { label: 'Tema cambiado', icon: '🎨', module: 'Perfil', severity: 'info' },
+  SYSTEM_ERROR: { label: 'Error del sistema', icon: '💥', module: 'Sistema', severity: 'error' },
 };
 
 // ─── CARD SERVICE ─────────────────────────────────────────────
@@ -555,23 +580,23 @@ export const CardService = {
     const now = new Date().toISOString();
     const card = {
       uid,
-      nombre:      data.nombre?.trim() || 'Mi tarjeta',
-      banco:       data.banco?.trim() || '',
-      ultimos4:    data.ultimos4 || '',
-      color:       data.color || CARD_COLORS[0],
-      red:         data.red || 'visa',
+      nombre: data.nombre?.trim() || 'Mi tarjeta',
+      banco: data.banco?.trim() || '',
+      ultimos4: data.ultimos4 || '',
+      color: data.color || CARD_COLORS[0],
+      red: data.red || 'visa',
       limiteTotal: Number(data.limiteTotal) || 0,
       saldoActual: Number(data.saldoActual) || 0,
-      minimoMes:   Number(data.minimoMes) || 0,
-      diaPago:     Number(data.diaPago) || 1,
-      diaCorte:    Number(data.diaCorte) || 25,
-      tasa:        data.tasa || '0',
-      notas:       data.notas || '',
-      activa:      true,
-      pagos:       [],
-      compras:     [],  // ← array para compras
-      createdAt:   now,
-      updatedAt:   now,
+      minimoMes: Number(data.minimoMes) || 0,
+      diaPago: Number(data.diaPago) || 1,
+      diaCorte: Number(data.diaCorte) || 25,
+      tasa: data.tasa || '0',
+      notas: data.notas || '',
+      activa: true,
+      pagos: [],
+      compras: [],  // ← array para compras
+      createdAt: now,
+      updatedAt: now,
     };
     const ref = await addDoc(collection(db, 'users', uid, 'cards'), card);
     return { id: ref.id, ...card };
@@ -589,33 +614,83 @@ export const CardService = {
   },
 
   async addPayment(uid, cardId, { monto, tipo, nota }) {
-    const ref  = doc(db, 'users', uid, 'cards', cardId);
+    const ref = doc(db, 'users', uid, 'cards', cardId);
     const snap = await getDoc(ref);
     if (!snap.exists()) throw new Error('Tarjeta no encontrada');
-    const card    = snap.data();
+    const card = snap.data();
     const payment = {
-      id:    'pay_' + Date.now().toString(36),
+      id: 'pay_' + Date.now().toString(36),
       monto: Number(monto) || 0,
       fecha: new Date().toISOString().split('T')[0],
-      tipo:  tipo || 'parcial',
-      nota:  nota?.trim() || '',
+      tipo: tipo || 'parcial',
+      nota: nota?.trim() || '',
     };
-    const pagos       = [payment, ...(card.pagos || [])];
+    const pagos = [payment, ...(card.pagos || [])];
     const saldoActual = Math.max(0, card.saldoActual - payment.monto);
     await updateDoc(ref, { pagos, saldoActual, updatedAt: new Date().toISOString() });
     return { ...card, id: cardId, pagos, saldoActual };
+  },
+  // Agrega este método dentro de CardService, después de addPurchase:
+
+  async updatePurchase(uid, cardId, purchaseId, updates) {
+    const ref = doc(db, 'users', uid, 'cards', cardId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Tarjeta no encontrada');
+
+    const card = snap.data();
+    const compras = (card.compras || []).map((c) =>
+      c.id === purchaseId
+        ? {
+          ...c,
+          monto: Number(updates.monto) || c.monto,
+          fecha: updates.fecha || c.fecha,
+          descripcion: updates.descripcion?.trim() ?? c.descripcion,
+          meses: Number(updates.meses) || c.meses,
+          nota: updates.nota?.trim() ?? c.nota,
+          updatedAt: new Date().toISOString(),
+        }
+        : c
+    );
+
+    // Recalcular saldoActual desde cero con las compras actualizadas
+    const saldoActual = compras.reduce((acc, c) => acc + Number(c.monto), 0)
+      - (card.pagos || []).reduce((acc, p) => acc + Number(p.monto), 0);
+
+    await updateDoc(ref, {
+      compras,
+      saldoActual: Math.max(0, saldoActual),
+      updatedAt: new Date().toISOString(),
+    });
+  },
+
+  async deletePurchase(uid, cardId, purchaseId) {
+    const ref = doc(db, 'users', uid, 'cards', cardId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Tarjeta no encontrada');
+
+    const card = snap.data();
+    const compras = (card.compras || []).filter((c) => c.id !== purchaseId);
+
+    const saldoActual = compras.reduce((acc, c) => acc + Number(c.monto), 0)
+      - (card.pagos || []).reduce((acc, p) => acc + Number(p.monto), 0);
+
+    await updateDoc(ref, {
+      compras,
+      saldoActual: Math.max(0, saldoActual),
+      updatedAt: new Date().toISOString(),
+    });
   },
 
   async addPurchase(uid, cardId, purchaseData) {
     const now = new Date().toISOString();
     const compra = {
-      id:          'compra_' + Date.now().toString(36),
-      monto:       Number(purchaseData.monto) || 0,
-      fecha:       purchaseData.fecha || now.split('T')[0],
+      id: 'compra_' + Date.now().toString(36),
+      monto: Number(purchaseData.monto) || 0,
+      fecha: purchaseData.fecha || now.split('T')[0],
       descripcion: (purchaseData.descripcion || '').trim(),
-      meses:       Number(purchaseData.meses) || 1,
-      nota:        (purchaseData.nota || '').trim(),
-      createdAt:   now,
+      meses: Number(purchaseData.meses) || 1,
+      nota: (purchaseData.nota || '').trim(),
+      createdAt: now,
     };
 
     const ref = doc(db, 'users', uid, 'cards', cardId);
@@ -629,9 +704,9 @@ export const CardService = {
   },
 
   daysUntilPayment(card) {
-    const today = new Date(); today.setHours(0,0,0,0);
+    const today = new Date(); today.setHours(0, 0, 0, 0);
     let payDate = new Date(today.getFullYear(), today.getMonth(), card.diaPago);
-    if (payDate < today) payDate.setMonth(payDate.getMonth()+1);
-    return Math.ceil((payDate - today)/(1000*60*60*24));
+    if (payDate < today) payDate.setMonth(payDate.getMonth() + 1);
+    return Math.ceil((payDate - today) / (1000 * 60 * 60 * 24));
   },
 };

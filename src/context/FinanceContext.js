@@ -6,9 +6,9 @@ import {
 } from '../firebase/services';
 
 import { useAuth } from './AuthContext';
+
 // ── Helpers tarjetas ──────────────────────────────────────────
 
-/** día 1-7 → s1, 8-14 → s2, 15-21 → s3, 22+ → s4 */
 function diaToSemana(dia) {
   if (dia <= 7)  return 's1';
   if (dia <= 14) return 's2';
@@ -16,7 +16,6 @@ function diaToSemana(dia) {
   return 's4';
 }
 
-/** Primer mes de cobro de una compra, dado el diaCorte de la tarjeta */
 function primerMesCobroCard(fechaStr, diaCorte) {
   const d         = new Date(fechaStr + 'T12:00:00');
   const diaCompra = d.getDate();
@@ -26,11 +25,6 @@ function primerMesCobroCard(fechaStr, diaCorte) {
   return new Date(anio, mesCierre + 1, 1);
 }
 
-/**
- * Dado un array de tarjetas y un monthKey (YYYY-MM), retorna
- * { s1, s2, s3, s4 } con el total MSI que vence en ese mes.
- * El cargo va a la semana del diaPago de cada tarjeta.
- */
 function calcularCargosTargetasPorSemana(cards, monthKey) {
   const [ty, tm]  = monthKey.split('-').map(Number);
   const targetIdx = ty * 12 + (tm - 1);
@@ -57,20 +51,20 @@ function calcularCargosTargetasPorSemana(cards, monthKey) {
 const FinanceContext = createContext(null);
 
 const fmt = (n) =>
-  new Intl.NumberFormat('es-MX', { style:'currency', currency:'MXN', maximumFractionDigits:0 }).format(n);
+  new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', maximumFractionDigits: 0 }).format(n);
 
 function calcularTotales(rows, income) {
   const editables = rows.filter((r) => r.editable);
-  const totales = { s1:0, s2:0, s3:0, s4:0 };
+  const totales = { s1: 0, s2: 0, s3: 0, s4: 0 };
   editables.forEach((r) => {
-    totales.s1 += Number(r.s1)||0; totales.s2 += Number(r.s2)||0;
-    totales.s3 += Number(r.s3)||0; totales.s4 += Number(r.s4)||0;
+    totales.s1 += Number(r.s1) || 0; totales.s2 += Number(r.s2) || 0;
+    totales.s3 += Number(r.s3) || 0; totales.s4 += Number(r.s4) || 0;
   });
   return rows.map((r) => {
     if (r.id === 'total')  return { ...r, ...totales };
     if (r.id === 'ahorro') {
-      const t = totales.s1+totales.s2+totales.s3+totales.s4;
-      return { ...r, s1: income-t, s2:0, s3:0, s4:0 };
+      const t = totales.s1 + totales.s2 + totales.s3 + totales.s4;
+      return { ...r, s1: income - t, s2: 0, s3: 0, s4: 0 };
     }
     return r;
   });
@@ -85,7 +79,7 @@ export function FinanceProvider({ children }) {
   const [history,     setHistory]     = useState([]);
   const [categories,  setCategories]  = useState([]);
   const [expenses,    setExpenses]    = useState([]);
-  const [incomes,     setIncomes]     = useState([]);   // ← NUEVO
+  const [incomes,     setIncomes]     = useState([]);
   const [cards,       setCards]       = useState([]);
   const [tasaCambio,  setTasaCambio]  = useState(0.0572);
   const [loading,     setLoading]     = useState(false);
@@ -122,10 +116,6 @@ export function FinanceProvider({ children }) {
       const month = await MonthService.getOrCreate(
         user.uid, activeMonthKey, cats, user.defaultIncome || 10000
       );
-
-      // Si hay ingresos registrados, el income del mes ya fue sincronizado
-      // por IncomeService.syncMonthIncome. Si no hay ingresos, usamos el
-      // income guardado en el documento del mes (retrocompatible).
       setMonthData(month);
     } catch (e) {
       console.error('Error cargando datos:', e);
@@ -146,7 +136,7 @@ export function FinanceProvider({ children }) {
     if (!user || !monthData) return;
     const before = monthData.rows.find((r) => r.id === rowId)?.[semana];
     const updatedRows = monthData.rows.map((r) =>
-      r.id === rowId ? { ...r, [semana]: Number(valor)||0 } : r
+      r.id === rowId ? { ...r, [semana]: Number(valor) || 0 } : r
     );
     const updated = { ...monthData, rows: updatedRows };
     setMonthData(updated);
@@ -296,46 +286,71 @@ export function FinanceProvider({ children }) {
 
   // ── Derivados ─────────────────────────────────────────────
 
-  // Income total del mes:
-  // Si hay ingresos registrados → suma de todos ellos (variable)
-  // Si no hay ninguno → usa el income fijo del documento del mes
   const ingresoTotal = incomes.length > 0
     ? IncomeService.totalFromList(incomes)
     : (monthData?.income || 0);
 
-  // Ingresos por semana (para la fila de ingresos en la tabla)
   const ingresosBySemana = IncomeService.bySemana(incomes);
 
-  // Cargos automáticos de tarjetas para el mes activo
   const cardsCargos = calcularCargosTargetasPorSemana(cards, activeMonthKey);
   const hayCargosTarjetas = Object.values(cardsCargos).some((v) => v > 0);
 
+  // ✅ IDs de categorías activas para filtrar rows huérfanas
+  const activeCatIds = new Set(categories.filter((c) => c.activa).map((c) => c.id));
+
   const rows = monthData
     ? calcularTotales([
-        ...monthData.rows.map((r) => {
-          if (r.editable) {
-            const cat = categories.find((c) => c.id === r.id);
-            if (cat && cat.color && cat.color !== r.color) {
-              return { ...r, color: cat.color };
+        ...monthData.rows
+          // ✅ Filtrar filas cuya categoría fue eliminada/desactivada
+          .filter((r) => !r.editable || activeCatIds.has(r.id))
+          .map((r) => {
+            if (r.editable) {
+              const cat = categories.find((c) => c.id === r.id);
+              if (cat?.color && cat.color !== r.color) return { ...r, color: cat.color };
             }
-          }
-          return r;
-        }),
-        { id:'total',  categoria:'Total Gastos', s1:0,s2:0,s3:0,s4:0, editable:false, color:'#455a64' },
-        { id:'ahorro', categoria:'Ahorro',        s1:0,s2:0,s3:0,s4:0, editable:false, color:'#00897b' },
+            return r;
+          }),
+        { id: 'total',  categoria: 'Total Gastos', s1: 0, s2: 0, s3: 0, s4: 0, editable: false, color: '#455a64' },
+        { id: 'ahorro', categoria: 'Ahorro',        s1: 0, s2: 0, s3: 0, s4: 0, editable: false, color: '#00897b' },
       ], ingresoTotal)
     : [];
 
-  const income      = ingresoTotal;
-  const totalMes    = rows.filter((r) => r.editable).reduce((a,r) => a+r.s1+r.s2+r.s3+r.s4, 0);
+  const income = ingresoTotal;
+
+  // ✅ totalMes ahora incluye cargos de tarjetas
+  const totalMes = rows.filter((r) => r.editable).reduce((a, r) => a + r.s1 + r.s2 + r.s3 + r.s4, 0)
+    + Object.values(cardsCargos).reduce((a, v) => a + v, 0);
+
   const ahorroMes   = income - totalMes;
-  const pctGastos   = income > 0 ? ((totalMes/income)*100).toFixed(1) : '0.0';
+  const pctGastos   = income > 0 ? ((totalMes / income) * 100).toFixed(1) : '0.0';
   const carroRow    = monthData?.rows.find((r) => r.id === 'abono_carro');
-  const totalCarro  = carroRow ? carroRow.s1+carroRow.s2+carroRow.s3+carroRow.s4 : 0;
-  const pctCarro    = income > 0 ? ((totalCarro/income)*100).toFixed(1) : '0.0';
-  const alertaCarro = income > 0 && totalCarro/income > (user?.prefs?.alertThreshold||50)/100;
+  const totalCarro  = carroRow ? carroRow.s1 + carroRow.s2 + carroRow.s3 + carroRow.s4 : 0;
+  const pctCarro    = income > 0 ? ((totalCarro / income) * 100).toFixed(1) : '0.0';
+  const alertaCarro = income > 0 && totalCarro / income > (user?.prefs?.alertThreshold || 50) / 100;
   const { label: activeMonthLabel } = fromMonthKey(activeMonthKey);
   const isCurrentMonth = activeMonthKey === currentMonthKey;
+
+  // ✅ Saldo disponible por semana: ingreso_sem + ahorro_sem_anterior
+  // s1: ingreso s1 (no hay semana anterior en el mes)
+  // s2: ingreso s2 + ahorro s1
+  // s3: ingreso s3 + ahorro s2
+  // s4: ingreso s4 + ahorro s3
+  const ingresoSemanal = income / 4;
+  const ingresoSem = incomes.length > 0
+    ? ['s1', 's2', 's3', 's4'].map((s) => ingresosBySemana[s] || 0)
+    : [ingresoSemanal, ingresoSemanal, ingresoSemanal, ingresoSemanal];
+
+  const gastoSem = ['s1', 's2', 's3', 's4'].map((s) =>
+    rows.filter((r) => r.editable).reduce((acc, r) => acc + (Number(r[s]) || 0), 0)
+    + (cardsCargos[s] || 0)
+  );
+  const ahorroSem = ingresoSem.map((ing, i) => ing - gastoSem[i]);
+
+  // saldo disponible por semana
+  const saldoDisponibleSem = ingresoSem.map((ing, i) => {
+    const ahorroAnterior = i > 0 ? ahorroSem[i - 1] : 0;
+    return ing + ahorroAnterior;
+  });
 
   return (
     <FinanceContext.Provider value={{
@@ -352,6 +367,8 @@ export function FinanceProvider({ children }) {
       expenses, addExpense, editExpense, deleteExpense,
       // Categorías
       categories, addCategory, updateCategory, deleteCategory, reactivateCategory,
+      // ✅ Saldo disponible por semana
+      saldoDisponibleSem,
     }}>
       {children}
     </FinanceContext.Provider>
