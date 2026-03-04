@@ -3,20 +3,22 @@ import {
   Box, Typography, IconButton,
   Grid, Paper, Snackbar, Alert, Tooltip, Chip, Drawer, List, ListItem,
   ListItemButton, ListItemIcon, ListItemText, Divider, Button, AppBar, Toolbar, Switch,
+  CircularProgress,
 } from '@mui/material';
 import {
   AccountBalance, Logout, TrendingUp, TrendingDown, Savings, Warning,
   SwapHoriz, Dashboard as DashboardIcon, History, Person, Menu as MenuIcon,
   SaveAlt, CheckCircle, ReceiptLong, Category as CategoryIcon,
   CreditCard, DarkMode, LightMode, ManageSearch,
+  PictureAsPdf, TableChart,
 } from '@mui/icons-material';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useFinance } from '../context/FinanceContext';
 import { useThemeMode } from '../context/ThemeContext';
 import { useExchangeRate } from '../hooks/useExchangeRate';
+import { useExport } from '../hooks/useExport';
 import FinanceTable from '../components/FinanceTable';
-//import PieChart from '../components/PieChart';
 import RadarChart from '../components/RadarChart';
 import SummaryCard from '../components/SummaryCard';
 import BarChart from '../components/BarChart';
@@ -150,66 +152,154 @@ function SidebarContent({ onNav }) {
 
 // ─── Dashboard Home ──────────────────────────────────────────
 function DashboardHome() {
-  const { totalMes, ahorroMes, pctGastos, pctCarro, alertaCarro, ingreso, activeMonthLabel, saveSnapshot } = useFinance();
+  const {
+    totalMes, ahorroMes, pctGastos, pctCarro, alertaCarro,
+    ingreso, activeMonthLabel, saveSnapshot,
+  } = useFinance();
   const { rate } = useExchangeRate();
+  const { exportPDF, exportExcel, exportingPdf, exportingExcel } = useExport();
+
   const [alertaDismissed, setAlertaDismissed] = useState(false);
-  const [snapshotDone, setSnapshotDone]       = useState(false);
+  const [snapshotDone,    setSnapshotDone]    = useState(false);
 
   const fmt    = (n) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(n);
   const fmtUSD = (n) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 
-  const handleSnapshot = () => { saveSnapshot(); setSnapshotDone(true); setTimeout(() => setSnapshotDone(false), 2500); };
+  const handleSnapshot = () => {
+    saveSnapshot();
+    setSnapshotDone(true);
+    setTimeout(() => setSnapshotDone(false), 2500);
+  };
 
   return (
     <>
+      {/* ── Header ── */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Box>
-          <Typography variant="h4" sx={{ fontFamily: 'Syne', fontWeight: 800, letterSpacing: '-1px' }}>Resumen mensual</Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>Controla tus finanzas y alcanza tus metas de ahorro</Typography>
+          <Typography variant="h4" sx={{ fontFamily: 'Syne', fontWeight: 800, letterSpacing: '-1px' }}>
+            Resumen mensual
+          </Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+            Controla tus finanzas y alcanza tus metas de ahorro
+          </Typography>
         </Box>
+
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
           <MonthNavigator />
+
+          {/* Guardar snapshot */}
           <Tooltip title={snapshotDone ? '¡Guardado!' : 'Guardar en historial'}>
-            <Button size="small" variant="outlined"
+            <Button
+              size="small" variant="outlined"
               startIcon={snapshotDone ? <CheckCircle /> : <SaveAlt />}
               onClick={handleSnapshot}
-              sx={{ borderColor: snapshotDone ? '#69f0ae' : 'rgba(79,195,247,0.3)', color: snapshotDone ? '#69f0ae' : 'primary.main', fontFamily: 'Syne', fontSize: '0.75rem' }}>
+              sx={{
+                borderColor: snapshotDone ? '#69f0ae' : 'rgba(79,195,247,0.3)',
+                color: snapshotDone ? '#69f0ae' : 'primary.main',
+                fontFamily: 'Syne', fontSize: '0.75rem',
+              }}
+            >
               {snapshotDone ? 'Guardado' : 'Guardar'}
+            </Button>
+          </Tooltip>
+
+          {/* ── Exportar PDF ── */}
+          <Tooltip title="Exportar dashboard como PDF">
+            <Button
+              size="small" variant="outlined"
+              startIcon={exportingPdf
+                ? <CircularProgress size={14} sx={{ color: '#ff5252' }} />
+                : <PictureAsPdf sx={{ fontSize: '1rem !important' }} />
+              }
+              onClick={() => exportPDF('dashboard-export-area')}
+              disabled={exportingPdf || exportingExcel}
+              sx={{
+                borderColor: 'rgba(255,82,82,0.35)',
+                color: '#ff8a80',
+                fontFamily: 'Syne', fontSize: '0.75rem',
+                '&:hover': { borderColor: '#ff5252', bgcolor: 'rgba(255,82,82,0.06)' },
+              }}
+            >
+              {exportingPdf ? 'Generando…' : 'PDF'}
+            </Button>
+          </Tooltip>
+
+          {/* ── Exportar Excel ── */}
+          <Tooltip title="Exportar datos a Excel (.xlsx)">
+            <Button
+              size="small" variant="outlined"
+              startIcon={exportingExcel
+                ? <CircularProgress size={14} sx={{ color: '#69f0ae' }} />
+                : <TableChart sx={{ fontSize: '1rem !important' }} />
+              }
+              onClick={exportExcel}
+              disabled={exportingPdf || exportingExcel}
+              sx={{
+                borderColor: 'rgba(105,240,174,0.35)',
+                color: '#69f0ae',
+                fontFamily: 'Syne', fontSize: '0.75rem',
+                '&:hover': { borderColor: '#69f0ae', bgcolor: 'rgba(105,240,174,0.06)' },
+              }}
+            >
+              {exportingExcel ? 'Generando…' : 'Excel'}
             </Button>
           </Tooltip>
         </Box>
       </Box>
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} sm={6} lg={3}><SummaryCard title="Ingreso mensual" value={fmt(ingreso)} sub={`${fmtUSD(ingreso * rate)} USD`} icon={<TrendingUp />} color="#4fc3f7" /></Grid>
-        <Grid item xs={12} sm={6} lg={3}><SummaryCard title="Total gastos" value={fmt(totalMes)} sub={`${pctGastos}% del ingreso`} icon={<TrendingDown />} color="#ff5252" /></Grid>
-        <Grid item xs={12} sm={6} lg={3}><SummaryCard title="Ahorro estimado" value={fmt(ahorroMes)} sub={ahorroMes >= 0 ? 'Excelente 🎯' : 'Déficit ⚠️'} icon={<Savings />} color={ahorroMes >= 0 ? '#69f0ae' : '#ff5252'} /></Grid>
-        <Grid item xs={12} sm={6} lg={3}><SummaryCard title="Abono carro" value={`${pctCarro}%`} sub={alertaCarro ? '¡Supera el umbral! ⚠️' : 'Del ingreso mensual'} icon={<Warning />} color={alertaCarro ? '#ffca28' : '#90caf9'} /></Grid>
-      </Grid>
+      {/* ── Área que se captura para el PDF ── */}
+      <Box id="dashboard-export-area">
 
-      <Grid container spacing={2} sx={{ mb: 3 }}>
-        <Grid item xs={12} md={5}>
-          <Paper sx={{ p: 2.5, height: 340, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" sx={{ mb: 2, fontSize: '0.92rem' }}>Gastos por categoría · semanas</Typography>
-            <Box sx={{ flex: 1, minHeight: 0 }}><RadarChart /></Box>
-          </Paper>
+        {/* Tarjetas resumen */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} sm={6} lg={3}>
+            <SummaryCard title="Ingreso mensual" value={fmt(ingreso)} sub={`${fmtUSD(ingreso * rate)} USD`} icon={<TrendingUp />} color="#4fc3f7" />
+          </Grid>
+          <Grid item xs={12} sm={6} lg={3}>
+            <SummaryCard title="Total gastos" value={fmt(totalMes)} sub={`${pctGastos}% del ingreso`} icon={<TrendingDown />} color="#ff5252" />
+          </Grid>
+          <Grid item xs={12} sm={6} lg={3}>
+            <SummaryCard title="Ahorro estimado" value={fmt(ahorroMes)} sub={ahorroMes >= 0 ? 'Excelente 🎯' : 'Déficit ⚠️'} icon={<Savings />} color={ahorroMes >= 0 ? '#69f0ae' : '#ff5252'} />
+          </Grid>
+          <Grid item xs={12} sm={6} lg={3}>
+            <SummaryCard title="Abono carro" value={`${pctCarro}%`} sub={alertaCarro ? '¡Supera el umbral! ⚠️' : 'Del ingreso mensual'} icon={<Warning />} color={alertaCarro ? '#ffca28' : '#90caf9'} />
+          </Grid>
         </Grid>
-        <Grid item xs={12} md={7}>
-          <Paper sx={{ p: 2.5, height: 340, display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" sx={{ mb: 2, fontSize: '0.92rem' }}>Gastos por semana</Typography>
-            <Box sx={{ flex: 1, minHeight: 0 }}><BarChart /></Box>
-          </Paper>
+
+        {/* Gráficas */}
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid item xs={12} md={5}>
+            <Paper sx={{ p: 2.5, height: 340, display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="h6" sx={{ mb: 2, fontSize: '0.92rem' }}>Gastos por categoría · semanas</Typography>
+              <Box sx={{ flex: 1, minHeight: 0 }}><RadarChart /></Box>
+            </Paper>
+          </Grid>
+          <Grid item xs={12} md={7}>
+            <Paper sx={{ p: 2.5, height: 340, display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="h6" sx={{ mb: 2, fontSize: '0.92rem' }}>Gastos por semana</Typography>
+              <Box sx={{ flex: 1, minHeight: 0 }}><BarChart /></Box>
+            </Paper>
+          </Grid>
         </Grid>
-      </Grid>
 
-      <Paper sx={{ p: { xs: 1.5, md: 2.5 } }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
-          <Typography variant="h6" sx={{ fontSize: '0.92rem' }}>Tabla de gastos — {activeMonthLabel}</Typography>
-        </Box>
-        <FinanceTable readOnly />
-      </Paper>
+        {/* Tabla */}
+        <Paper sx={{ p: { xs: 1.5, md: 2.5 } }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2, flexWrap: 'wrap', gap: 1 }}>
+            <Typography variant="h6" sx={{ fontSize: '0.92rem' }}>
+              Tabla de gastos — {activeMonthLabel}
+            </Typography>
+          </Box>
+          <FinanceTable readOnly />
+        </Paper>
 
-      <Snackbar open={alertaCarro && !alertaDismissed} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }} onClose={() => setAlertaDismissed(true)} autoHideDuration={8000}>
+      </Box>{/* fin #dashboard-export-area */}
+
+      <Snackbar
+        open={alertaCarro && !alertaDismissed}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        onClose={() => setAlertaDismissed(true)}
+        autoHideDuration={8000}
+      >
         <Alert severity="warning" variant="filled" onClose={() => setAlertaDismissed(true)} sx={{ borderRadius: 2 }}>
           ⚠️ El abono al carro supera el umbral ({pctCarro}%). Considera ajustar tu presupuesto.
         </Alert>
@@ -220,7 +310,7 @@ function DashboardHome() {
 
 // ─── Layout principal ────────────────────────────────────────
 export default function Dashboard() {
-  const { rate }  = useExchangeRate();
+  const { rate }   = useExchangeRate();
   const { isDark } = useThemeMode();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -243,8 +333,11 @@ export default function Dashboard() {
       </Box>
 
       {/* Drawer móvil */}
-      <Drawer variant="temporary" open={mobileOpen} onClose={() => setMobileOpen(false)} ModalProps={{ keepMounted: true }}
-        sx={{ display: { xs: 'block', md: 'none' }, '& .MuiDrawer-paper': { width: DRAWER_W } }}>
+      <Drawer
+        variant="temporary" open={mobileOpen} onClose={() => setMobileOpen(false)}
+        ModalProps={{ keepMounted: true }}
+        sx={{ display: { xs: 'block', md: 'none' }, '& .MuiDrawer-paper': { width: DRAWER_W } }}
+      >
         <SidebarContent onNav={() => setMobileOpen(false)} />
       </Drawer>
 
@@ -264,7 +357,11 @@ export default function Dashboard() {
               icon={<SwapHoriz sx={{ fontSize: '14px !important' }} />}
               label={`1 MXN = ${rate.toFixed(4)} USD`}
               size="small"
-              sx={{ fontFamily: 'DM Mono', fontSize: '0.68rem', bgcolor: 'rgba(79,195,247,0.1)', color: '#4fc3f7', border: '1px solid rgba(79,195,247,0.2)', height: 26 }}
+              sx={{
+                fontFamily: 'DM Mono', fontSize: '0.68rem',
+                bgcolor: 'rgba(79,195,247,0.1)', color: '#4fc3f7',
+                border: '1px solid rgba(79,195,247,0.2)', height: 26,
+              }}
             />
           </Toolbar>
         </AppBar>
