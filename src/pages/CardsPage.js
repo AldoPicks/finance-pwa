@@ -38,21 +38,22 @@ function addMonthsToKey(key, n) {
   return getMonthKey(new Date(y, m - 1 + n, 1));
 }
 
-function primerMesCobro(compra, diaCorte) {
+function primerMesCobro(compra, diaCorte, diaPago) {
   const fechaCompra = new Date(compra.fecha + 'T12:00:00');
-  const diaCompra = fechaCompra.getDate();
-  const mesCompra = fechaCompra.getMonth();
-  const anioCompra = fechaCompra.getFullYear();
+  const diaCompra   = fechaCompra.getDate();
+  const mesCompra   = fechaCompra.getMonth();
+  const anioCompra  = fechaCompra.getFullYear();
 
-  const dentroDelCorteActual = diaCompra <= diaCorte;
-  const mesCierre = dentroDelCorteActual ? mesCompra : mesCompra + 1;
-  const fechaPrimerCobro = new Date(anioCompra, mesCierre + 1, 1);
-  return getMonthKey(fechaPrimerCobro);
+  const mesCierre = diaCompra <= diaCorte ? mesCompra : mesCompra + 1;
+  // ✅ Si diaPago < diaCorte → pago cae el mes SIGUIENTE al cierre (ej: corte 25, pago 5)
+  //    Si diaPago >= diaCorte → pago cae el MISMO mes del cierre (ej: corte 3, pago 23)
+  const mesCobro = (Number(diaPago) || 1) < (Number(diaCorte) || 25) ? mesCierre + 1 : mesCierre;
+  return getMonthKey(new Date(anioCompra, mesCobro, 1));
 }
 
-function parcialidadEnMes(compra, targetKey, diaCorte) {
+function parcialidadEnMes(compra, targetKey, diaCorte, diaPago) {
   const meses = Number(compra.meses) || 1;
-  const inicioKey = primerMesCobro(compra, diaCorte);
+  const inicioKey = primerMesCobro(compra, diaCorte, diaPago);
   const [iy, im] = inicioKey.split('-').map(Number);
   const [ty, tm] = targetKey.split('-').map(Number);
   const startIdx = iy * 12 + (im - 1);
@@ -63,12 +64,13 @@ function parcialidadEnMes(compra, targetKey, diaCorte) {
 }
 
 function calcularProyecciones(card, n = 5) {
-  const hoy = getMonthKey();
+  const hoy      = getMonthKey();
   const diaCorte = Number(card.diaCorte) || 25;
+  const diaPago  = Number(card.diaPago)  || 1;
 
   return Array.from({ length: n }, (_, i) => {
     const key = addMonthsToKey(hoy, i);
-    const cargo = (card.compras || []).reduce((acc, c) => acc + parcialidadEnMes(c, key, diaCorte), 0);
+    const cargo = (card.compras || []).reduce((acc, c) => acc + parcialidadEnMes(c, key, diaCorte, diaPago), 0);
     const pagadoEnMes = (card.pagos || [])
       .filter((p) => (p.fecha || '').substring(0, 7) === key)
       .reduce((acc, p) => acc + Number(p.monto), 0);
@@ -269,18 +271,20 @@ function CardDialog({ open, onClose, initial }) {
 // ─── Dialog: Registrar pago ───────────────────────────────────
 function PaymentDialog({ open, onClose, card }) {
   const { user } = useAuth();
-  const [form, setForm] = useState({ monto: '', tipo: 'minimo', nota: '' });
+  const today = new Date().toISOString().split('T')[0];
+  const [form, setForm] = useState({ monto: '', tipo: 'minimo', fecha: today, nota: '' });
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (open && card) { setForm({ monto: String(card.minimoMes || ''), tipo: 'minimo', nota: '' }); setError(''); }
+    if (open && card) { setForm({ monto: String(card.minimoMes || ''), tipo: 'minimo', fecha: today, nota: '' }); setError(''); }
   }, [open, card]);
 
   const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
     if (!form.monto || Number(form.monto) <= 0) { setError('El monto debe ser mayor a 0'); return; }
+    if (!form.fecha) { setError('La fecha es obligatoria'); return; }
     setSaving(true);
     try {
       await CardDB.addPayment(user.uid, card.id, { ...form, monto: Number(form.monto) });
@@ -311,6 +315,8 @@ function PaymentDialog({ open, onClose, card }) {
         </FormControl>
         <TextField fullWidth label="Monto" type="number" value={form.monto} onChange={(e) => set('monto', e.target.value)} sx={{ mb: 2 }}
           InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
+        <TextField fullWidth label="Fecha de pago" type="date" value={form.fecha} onChange={(e) => set('fecha', e.target.value)} sx={{ mb: 2 }}
+          InputLabelProps={{ shrink: true }} />
         <TextField fullWidth label="Nota (opcional)" value={form.nota} onChange={(e) => set('nota', e.target.value)} placeholder="Ej: transferencia SPEI" />
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 2.5 }}>
@@ -318,6 +324,65 @@ function PaymentDialog({ open, onClose, card }) {
         <Button variant="contained" onClick={handleSave} disabled={saving}
           sx={{ fontFamily: 'Syne', fontWeight: 700, bgcolor: '#43a047', '&:hover': { bgcolor: '#388e3c' } }}>
           {saving ? 'Guardando...' : 'Registrar pago'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+// ─── Dialog: Editar pago ──────────────────────────────────────
+function EditPaymentDialog({ open, onClose, card, payment }) {
+  const { user } = useAuth();
+  const [form, setForm] = useState({ monto: '', tipo: 'minimo', fecha: '', nota: '' });
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (open && payment) {
+      setForm({ monto: payment.monto || '', tipo: payment.tipo || 'minimo', fecha: payment.fecha || '', nota: payment.nota || '' });
+      setError('');
+    }
+  }, [open, payment]);
+
+  const set = (k, v) => setForm((f) => ({ ...f, [k]: v }));
+
+  const handleSave = async () => {
+    if (!form.monto || Number(form.monto) <= 0) { setError('El monto debe ser mayor a 0'); return; }
+    if (!form.fecha) { setError('La fecha es obligatoria'); return; }
+    setSaving(true);
+    try {
+      await CardDB.updatePayment(user.uid, card.id, payment.id, { ...form, monto: Number(form.monto) });
+      AuditService.log(user.uid, 'CARD_EDIT', { detail: `Pago editado: ${fmt(form.monto)} — ${card.nombre}` });
+      onClose(true);
+    } catch (e) { setError(e.message); }
+    finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open={open} onClose={() => onClose(false)} maxWidth="xs" fullWidth
+      PaperProps={{ sx: { borderRadius: 3, border: '1px solid rgba(67,160,71,0.3)' } }}>
+      <DialogTitle sx={{ fontFamily: 'Syne', fontWeight: 800 }}>✏️ Editar pago</DialogTitle>
+      <DialogContent>
+        {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+        <FormControl fullWidth sx={{ mb: 2, mt: 1 }}>
+          <InputLabel>Tipo de pago</InputLabel>
+          <Select value={form.tipo} label="Tipo de pago" onChange={(e) => set('tipo', e.target.value)}>
+            {[['minimo', 'Pago mínimo'], ['parcial', 'Pago parcial'], ['total', 'Pago total'], ['extra', 'Abono extra']].map(([id, label]) => (
+              <MenuItem key={id} value={id}><Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.85rem' }}>{label}</Typography></MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <TextField fullWidth label="Monto" type="number" value={form.monto} onChange={(e) => set('monto', e.target.value)} sx={{ mb: 2 }}
+          InputProps={{ startAdornment: <InputAdornment position="start">$</InputAdornment> }} />
+        <TextField fullWidth label="Fecha de pago" type="date" value={form.fecha} onChange={(e) => set('fecha', e.target.value)} sx={{ mb: 2 }}
+          InputLabelProps={{ shrink: true }} />
+        <TextField fullWidth label="Nota (opcional)" value={form.nota} onChange={(e) => set('nota', e.target.value)} />
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 2.5 }}>
+        <Button onClick={() => onClose(false)} sx={{ fontFamily: 'Syne', color: 'text.secondary' }}>Cancelar</Button>
+        <Button variant="contained" onClick={handleSave} disabled={saving}
+          sx={{ fontFamily: 'Syne', fontWeight: 700, bgcolor: '#43a047', '&:hover': { bgcolor: '#388e3c' } }}>
+          {saving ? 'Guardando...' : 'Guardar cambios'}
         </Button>
       </DialogActions>
     </Dialog>
@@ -502,7 +567,7 @@ function EditPurchaseDialog({ open, onClose, card, purchase }) {
 }
 
 // ─── Panel de detalle expandible ─────────────────────────────
-function CardDetail({ card, onEditPurchase, onDeletePurchase }) {
+function CardDetail({ card, onEditPurchase, onDeletePurchase, onEditPayment, onDeletePayment }) {
   const [tab, setTab] = useState(0);
   const color = card.color;
   const proyecciones = useMemo(() => calcularProyecciones(card, 5), [card]);
@@ -621,7 +686,8 @@ function CardDetail({ card, onEditPurchase, onDeletePurchase }) {
                   {[...(card.compras)].sort((a, b) => b.fecha.localeCompare(a.fecha)).map((c) => {
                     const meses = Number(c.meses) || 1;
                     const diaCorteNum = Number(card.diaCorte) || 25;
-                    const inicioKey = primerMesCobro(c, diaCorteNum);
+                    const diaPagoNum  = Number(card.diaPago)  || 1;
+                    const inicioKey = primerMesCobro(c, diaCorteNum, diaPagoNum);
                     const finKey = addMonthsToKey(inicioKey, meses - 1);
                     const liquidada = finKey < getMonthKey();
                     return (
@@ -691,6 +757,7 @@ function CardDetail({ card, onEditPurchase, onDeletePurchase }) {
                     <TableCell>Tipo</TableCell>
                     <TableCell align="right">Monto</TableCell>
                     <TableCell>Nota</TableCell>
+                    <TableCell />
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -710,6 +777,22 @@ function CardDetail({ card, onEditPurchase, onDeletePurchase }) {
                       </TableCell>
                       <TableCell align="right"><Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.78rem', fontWeight: 700, color: '#43a047' }}>{fmt(p.monto)}</Typography></TableCell>
                       <TableCell><Typography sx={{ fontFamily: 'DM Mono', fontSize: '0.72rem', color: 'text.secondary' }}>{p.nota || '—'}</Typography></TableCell>
+                      <TableCell align="right">
+                        <Box sx={{ display: 'flex', gap: 0.3, justifyContent: 'flex-end' }}>
+                          <Tooltip title="Editar pago">
+                            <IconButton size="small" onClick={() => onEditPayment && onEditPayment(card, p)}
+                              sx={{ color: 'text.secondary', '&:hover': { color: '#4fc3f7' } }}>
+                              <Edit sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Tooltip>
+                          <Tooltip title="Eliminar pago">
+                            <IconButton size="small" onClick={() => onDeletePayment && onDeletePayment(card, p)}
+                              sx={{ color: 'text.secondary', '&:hover': { color: '#ff5252' } }}>
+                              <Delete sx={{ fontSize: 14 }} />
+                            </IconButton>
+                          </Tooltip>
+                        </Box>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -742,6 +825,8 @@ export default function CardsPage() {
   const [toast, setToast] = useState('');
   const [editPurchase, setEditPurchase] = useState(null);
   const [confirmDelPurchase, setConfirmDelPurchase] = useState(null);
+  const [editPayment, setEditPayment] = useState(null);
+  const [confirmDelPayment, setConfirmDelPayment] = useState(null);
 
   const { checkCardPayments } = useNotifications(cards);
 
@@ -769,6 +854,22 @@ export default function CardsPage() {
     if (saved) { loadCards(); showToast('✅ Compra actualizada'); }
   };
 
+  const handleEditPaymentClose = (saved) => {
+    setEditPayment(null);
+    if (saved) { loadCards(); showToast('✅ Pago actualizado'); }
+  };
+
+  const handleDeletePayment = async () => {
+    if (!confirmDelPayment) return;
+    await CardDB.deletePayment(user.uid, confirmDelPayment.card.id, confirmDelPayment.payment.id);
+    AuditService.log(user.uid, 'CARD_EDIT', {
+      detail: `Pago eliminado: ${fmt(confirmDelPayment.payment.monto)} — ${confirmDelPayment.card.nombre}`,
+    });
+    setConfirmDelPayment(null);
+    loadCards();
+    showToast('🗑️ Pago eliminado');
+  };
+
   const handleDeletePurchase = async () => {
     if (!confirmDelPurchase) return;
     await CardDB.deletePurchase(user.uid, confirmDelPurchase.card.id, confirmDelPurchase.purchase.id);
@@ -780,8 +881,8 @@ export default function CardsPage() {
     showToast('🗑️ Compra eliminada');
   };
 
-  const totalDeuda = cards.reduce((a, c) => a + c.saldoActual, 0);
-  const totalLimite = cards.reduce((a, c) => a + c.limiteTotal, 0);
+  const totalDeuda = cards.reduce((a, c) => a + (Number(c.saldoActual) || 0), 0);
+  const totalLimite = cards.reduce((a, c) => a + (Number(c.limiteTotal) || 0), 0);
   const totalDisponible = Math.max(0, totalLimite - totalDeuda);
   const usoGlobal = totalLimite > 0 ? ((totalDeuda / totalLimite) * 100).toFixed(1) : '0.0';
   const pagosProximos = cards.filter((c) => CardDB.daysUntilPayment(c) <= 5);
@@ -865,6 +966,8 @@ export default function CardsPage() {
                     card={card}
                     onEditPurchase={(c, p) => setEditPurchase({ card: c, purchase: p })}
                     onDeletePurchase={(c, p) => setConfirmDelPurchase({ card: c, purchase: p })}
+                    onEditPayment={(c, p) => setEditPayment({ card: c, payment: p })}
+                    onDeletePayment={(c, p) => setConfirmDelPayment({ card: c, payment: p })}
                   />
                 )}
               </Box>
@@ -912,6 +1015,28 @@ export default function CardsPage() {
         card={editPurchase?.card}
         purchase={editPurchase?.purchase}
       />
+      <EditPaymentDialog
+        open={Boolean(editPayment)}
+        onClose={handleEditPaymentClose}
+        card={editPayment?.card}
+        payment={editPayment?.payment}
+      />
+
+      {/* Confirmación eliminación pago */}
+      {confirmDelPayment && (
+        <Alert severity="error" sx={{ mt: 2.5, borderRadius: 2 }}
+          action={
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button size="small" color="error" variant="contained" onClick={handleDeletePayment}
+                sx={{ fontFamily: 'Syne', fontWeight: 700 }}>Eliminar</Button>
+              <Button size="small" onClick={() => setConfirmDelPayment(null)}
+                sx={{ color: 'text.secondary', fontFamily: 'Syne' }}>Cancelar</Button>
+            </Box>
+          }>
+          ¿Eliminar pago de <strong>{fmt(confirmDelPayment?.payment?.monto)}</strong>
+          {confirmDelPayment?.payment?.nota ? ` — "${confirmDelPayment.payment.nota}"` : ''}?
+        </Alert>
+      )}
 
       {/* Toast */}
       {toast && (

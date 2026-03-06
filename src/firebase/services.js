@@ -625,7 +625,7 @@ export const CardService = {
     await updateDoc(doc(db, 'users', uid, 'cards', cardId), { activa: false, updatedAt: new Date().toISOString() });
   },
 
-  async addPayment(uid, cardId, { monto, tipo, nota }) {
+  async addPayment(uid, cardId, { monto, tipo, fecha, nota }) {
     const ref = doc(db, 'users', uid, 'cards', cardId);
     const snap = await getDoc(ref);
     if (!snap.exists()) throw new Error('Tarjeta no encontrada');
@@ -633,7 +633,8 @@ export const CardService = {
     const payment = {
       id: 'pay_' + Date.now().toString(36),
       monto: Number(monto) || 0,
-      fecha: new Date().toISOString().split('T')[0],
+      // ✅ Usar la fecha que el usuario eligió, no siempre hoy
+      fecha: fecha || new Date().toISOString().split('T')[0],
       tipo: tipo || 'parcial',
       nota: nota?.trim() || '',
     };
@@ -641,6 +642,36 @@ export const CardService = {
     const saldoActual = Math.max(0, card.saldoActual - payment.monto);
     await updateDoc(ref, { pagos, saldoActual, updatedAt: new Date().toISOString() });
     return { ...card, id: cardId, pagos, saldoActual };
+  },
+
+  async updatePayment(uid, cardId, paymentId, updates) {
+    const ref = doc(db, 'users', uid, 'cards', cardId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Tarjeta no encontrada');
+    const card = snap.data();
+    const oldPayment = (card.pagos || []).find((p) => p.id === paymentId);
+    const pagos = (card.pagos || []).map((p) =>
+      p.id === paymentId
+        ? { ...p, monto: Number(updates.monto) || p.monto, tipo: updates.tipo || p.tipo,
+            fecha: updates.fecha || p.fecha, nota: updates.nota?.trim() ?? p.nota }
+        : p
+    );
+    // Recalcular saldo: revertir pago viejo, aplicar pago nuevo
+    const diff = (Number(updates.monto) || 0) - (Number(oldPayment?.monto) || 0);
+    const saldoActual = Math.max(0, card.saldoActual - diff);
+    await updateDoc(ref, { pagos, saldoActual, updatedAt: new Date().toISOString() });
+  },
+
+  async deletePayment(uid, cardId, paymentId) {
+    const ref = doc(db, 'users', uid, 'cards', cardId);
+    const snap = await getDoc(ref);
+    if (!snap.exists()) throw new Error('Tarjeta no encontrada');
+    const card = snap.data();
+    const payment = (card.pagos || []).find((p) => p.id === paymentId);
+    const pagos = (card.pagos || []).filter((p) => p.id !== paymentId);
+    // Revertir el monto del pago eliminado al saldo
+    const saldoActual = card.saldoActual + (Number(payment?.monto) || 0);
+    await updateDoc(ref, { pagos, saldoActual, updatedAt: new Date().toISOString() });
   },
   // Agrega este método dentro de CardService, después de addPurchase:
 
