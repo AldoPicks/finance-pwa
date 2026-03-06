@@ -326,37 +326,35 @@ export const MonthService = {
 
     if (snap.exists()) {
       const month = snap.data();
-      // ✅ Al cargar un mes existente, eliminar rows de categorías inactivas/eliminadas
+      // Limpiar rows de categorías inactivas/eliminadas
       const activeCatIds = new Set(categories.filter((c) => c.activa).map((c) => c.id));
       const filteredRows = month.rows.filter((r) => !r.editable || activeCatIds.has(r.id));
       if (filteredRows.length !== month.rows.length) {
-        // Hay rows huérfanas — limpiar en Firestore silenciosamente
         await updateDoc(ref, { rows: filteredRows, updatedAt: new Date().toISOString() });
         return { ...month, rows: filteredRows };
       }
       return month;
     }
 
-    const now = new Date().toISOString();
-    // ✅ Solo incluir categorías activas al crear el mes
+    // ✅ Mes no existe — devolver estructura vacía en MEMORIA sin escribir a Firestore
+    // Solo se persistirá cuando el usuario edite una celda o registre ingreso
     const rows = categories
       .filter((c) => c.activa)
-      .map((c) => {
-        const b = DEFAULT_BUDGETS[c.id] || { s1: 0, s2: 0, s3: 0, s4: 0 };
-        return { id: c.id, categoria: c.nombre, color: c.color, editable: true, ...b };
-      });
+      .map((c) => ({
+        id: c.id, categoria: c.nombre, color: c.color, editable: true,
+        s1: 0, s2: 0, s3: 0, s4: 0,
+      }));
 
-    const newMonth = {
+    return {
       monthKey, uid,
-      income: defaultIncome,
+      income: 0,       // ← nunca defaultIncome para meses nuevos
       rows,
       notes: '',
       closed: false,
-      createdAt: now,
-      updatedAt: now,
+      isVirtual: true, // ← flag: aún no existe en Firestore
+      createdAt: null,
+      updatedAt: null,
     };
-    await setDoc(ref, newMonth);
-    return newMonth;
   },
 
   async syncFromExpenses(uid, monthKey) {
@@ -412,14 +410,22 @@ export const MonthService = {
 
   async save(uid, monthKey, data) {
     const ref = doc(db, 'users', uid, 'months', monthKey);
-    const updated = { ...data, updatedAt: new Date().toISOString() };
+    // ✅ Quitar isVirtual antes de persistir en Firestore
+    const { isVirtual, ...cleanData } = data;
+    const now = new Date().toISOString();
+    const updated = {
+      ...cleanData,
+      createdAt: cleanData.createdAt || now,
+      updatedAt: now,
+    };
     await setDoc(ref, updated, { merge: true });
     return updated;
   },
 
   async updateIncome(uid, monthKey, income) {
     const ref = doc(db, 'users', uid, 'months', monthKey);
-    await updateDoc(ref, { income: Number(income) || 0, updatedAt: new Date().toISOString() });
+    // ✅ setDoc merge:true por si el mes era virtual (no existía en Firestore)
+    await setDoc(ref, { income: Number(income) || 0, updatedAt: new Date().toISOString() }, { merge: true });
     const snap = await getDoc(ref);
     return snap.data();
   },

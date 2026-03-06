@@ -292,9 +292,12 @@ export function FinanceProvider({ children }) {
 
   // ── Derivados ─────────────────────────────────────────────
 
+  // ✅ Si el mes es virtual (nunca guardado), ingreso = 0 aunque defaultIncome esté configurado
   const ingresoTotal = incomes.length > 0
     ? IncomeService.totalFromList(incomes)
-    : (monthData?.income || 0);
+    : monthData?.isVirtual
+      ? 0
+      : (Number(monthData?.income) || 0);
 
   const ingresosBySemana = IncomeService.bySemana(incomes);
 
