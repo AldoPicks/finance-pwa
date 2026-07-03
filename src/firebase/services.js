@@ -367,8 +367,18 @@ export const MonthService = {
 
     const monthRef = doc(db, 'users', uid, 'months', monthKey);
     const monthSnap = await getDoc(monthRef);
-    if (!monthSnap.exists()) return;
-    const month = monthSnap.data();
+    const month = monthSnap.exists()
+      ? monthSnap.data()
+      : {
+          monthKey,
+          uid,
+          income: 0,
+          notes: '',
+          closed: false,
+          rows: [],
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
 
     // Obtener categorías para saber cuáles están activas
     const catsSnap = await getDocs(collection(db, 'users', uid, 'categories'));
@@ -381,30 +391,39 @@ export const MonthService = {
       totals[e.categoryId][`s${e.semana}`] += e.monto;
     });
 
-    const updatedRows = month.rows
-      // ✅ Filtrar filas de categorías que ya no están activas
-      .filter((r) => !r.editable || (catsMap[r.id] && catsMap[r.id].activa))
-      .map((r) => {
-        const t = totals[r.id];
-        return t ? { ...r, s1: t.s1, s2: t.s2, s3: t.s3, s4: t.s4 }
-          : { ...r, s1: 0, s2: 0, s3: 0, s4: 0 };
-      });
+    const activeCats = Object.values(catsMap).filter((c) => c.activa);
+    const baseRows = activeCats.map((cat) => ({
+      id: cat.id, categoria: cat.nombre, color: cat.color, editable: true,
+      s1: 0, s2: 0, s3: 0, s4: 0,
+    }));
 
-    const existingIds = new Set(updatedRows.map((r) => r.id));
+    const existingRows = (month.rows || [])
+      .filter((r) => !r.editable || (catsMap[r.id] && catsMap[r.id].activa));
 
-    // ✅ Solo agregar categorías nuevas si están activas
-    Object.keys(totals).forEach((catId) => {
-      if (!existingIds.has(catId) && catsMap[catId] && catsMap[catId].activa) {
-        const cat = catsMap[catId];
-        const t = totals[catId];
-        updatedRows.push({
-          id: catId, categoria: cat.nombre, color: cat.color, editable: true,
-          s1: t.s1, s2: t.s2, s3: t.s3, s4: t.s4,
-        });
-      }
+    const rowById = new Map(existingRows.map((r) => [r.id, r]));
+
+    const updatedRows = baseRows.map((row) => {
+      const existing = rowById.get(row.id);
+      const totalsRow = totals[row.id];
+      const values = totalsRow ? {
+        s1: totalsRow.s1,
+        s2: totalsRow.s2,
+        s3: totalsRow.s3,
+        s4: totalsRow.s4,
+      } : { s1: 0, s2: 0, s3: 0, s4: 0 };
+
+      return existing
+        ? { ...existing, categoria: existing.categoria || row.categoria, color: existing.color || row.color, ...values }
+        : { ...row, ...values };
     });
 
-    await updateDoc(monthRef, { rows: updatedRows, updatedAt: new Date().toISOString() });
+    // ✅ Si el mes no existía todavía, crearlo con la fila de gastos actualizada
+    await setDoc(monthRef, {
+      ...month,
+      rows: updatedRows,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
     return { ...month, rows: updatedRows };
   },
 

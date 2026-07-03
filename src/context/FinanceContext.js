@@ -119,9 +119,15 @@ export function FinanceProvider({ children }) {
       setHistory(hist);
       setCards(cds);
 
-      const month = await MonthService.getOrCreate(
+      let month = await MonthService.getOrCreate(
         user.uid, activeMonthKey, cats, user.defaultIncome || 10000
       );
+
+      if (exps.length > 0 && month.isVirtual) {
+        await MonthService.syncFromExpenses(user.uid, activeMonthKey);
+        month = await MonthService.getOrCreate(user.uid, activeMonthKey, cats, user.defaultIncome || 10000);
+      }
+
       setMonthData(month);
     } catch (e) {
       console.error('Error cargando datos:', e);
