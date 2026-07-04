@@ -8,6 +8,7 @@ import {
   reauthenticateWithCredential,
   EmailAuthProvider,
   sendEmailVerification,
+  sendPasswordResetEmail,
 } from 'firebase/auth';
 import { auth } from '../firebase/config';
 import { UserService, AuditService } from '../firebase/services';
@@ -69,11 +70,16 @@ export function AuthProvider({ children }) {
       err.code = 'auth/email-not-verified';
       throw err;
     }
+
+    // ✅ Verificar si el usuario usó contraseña temporal
+    const hasTemp = await UserService.hasTemporaryPassword(cred.user.uid);
+    const profileWithTemp = { ...profile, hasTemporaryPassword: hasTemp };
+
     AuditService.log(cred.user.uid, 'AUTH_LOGIN', {
       email, userName: profile?.name || '',
       detail: `Login desde ${/Mobi/.test(navigator.userAgent) ? 'móvil' : 'desktop'}`,
     });
-    return profile;
+    return profileWithTemp;
   };
 
   const register = async (email, password, name) => {
@@ -136,6 +142,7 @@ export function AuthProvider({ children }) {
     const credential = EmailAuthProvider.credential(fbUser.email, currentPassword);
     await reauthenticateWithCredential(fbUser, credential);
     await updatePassword(fbUser, newPassword);
+    await UserService.clearTemporaryPassword(user.uid);
     AuditService.log(user.uid, 'AUTH_CHANGE_PASSWORD', {
       email: user.email, userName: user.name,
       detail: 'Contraseña cambiada',
@@ -143,11 +150,26 @@ export function AuthProvider({ children }) {
     return true;
   };
 
+  const requestPasswordReset = async (email) => {
+    await sendPasswordResetEmail(auth, email);
+    AuditService.log(auth.currentUser?.uid || 'anonymous', 'AUTH_PASSWORD_RESET_REQUESTED', {
+      email,
+      detail: 'Solicitud de recuperación de contraseña',
+    });
+    return { email };
+  };
+
+  const clearTemporaryPassword = async () => {
+    if (!user) return;
+    await UserService.clearTemporaryPassword(user.uid);
+    setUser({ ...user, hasTemporaryPassword: false });
+  };
+
   return (
     <AuthContext.Provider value={{
       user, fbUser, loading,
       login, logout, register, updateProfile, changePassword,
-      resendVerificationEmail,
+      resendVerificationEmail, requestPasswordReset, clearTemporaryPassword,
     }}>
       {children}
     </AuthContext.Provider>

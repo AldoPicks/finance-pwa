@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { AuditProvider } from './context/AuditContext';
 import { FinanceProvider } from './context/FinanceContext';
 import Login from './pages/Login';
+import PasswordRecovery from './pages/PasswordRecovery';
 import Dashboard from './pages/Dashboard';
 
 function PrivateRoute({ children }) {
@@ -20,6 +21,7 @@ function AppInner() {
       <FinanceProvider>
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/recover" element={<PasswordRecovery />} />
           <Route
             path="/*"
             element={

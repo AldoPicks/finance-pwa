@@ -139,6 +139,24 @@ export const UserService = {
     const snap = await getDoc(ref);
     return snap.data();
   },
+
+
+  async hasTemporaryPassword(uid) {
+    const snap = await getDoc(doc(db, 'users', uid));
+    if (!snap.exists()) return false;
+    const data = snap.data();
+    if (!data.temporaryPassword) return false;
+    const expiry = new Date(data.temporaryPasswordExpiry);
+    return expiry > new Date();
+  },
+
+  async clearTemporaryPassword(uid) {
+    await updateDoc(doc(db, 'users', uid), {
+      temporaryPassword: null,
+      temporaryPasswordExpiry: null,
+      updatedAt: new Date().toISOString(),
+    });
+  },
 };
 
 // ─── CATEGORY SERVICE ─────────────────────────────────────────
@@ -562,6 +580,7 @@ export const AUDIT_ACTIONS = {
   AUTH_LOGOUT: { label: 'Cierre de sesión', icon: '👋', module: 'Auth', severity: 'info' },
   AUTH_REGISTER: { label: 'Registro de cuenta', icon: '✅', module: 'Auth', severity: 'success' },
   AUTH_CHANGE_PASSWORD: { label: 'Contraseña cambiada', icon: '🔑', module: 'Auth', severity: 'warning' },
+  AUTH_PASSWORD_RESET_REQUESTED: { label: 'Recuperación de contraseña', icon: '🔄', module: 'Auth', severity: 'warning' },
   AUTH_LOGIN_FAILED: { label: 'Login fallido', icon: '❌', module: 'Auth', severity: 'error' },
   FINANCE_INCOME_EDIT: { label: 'Ingreso mensual editado', icon: '💰', module: 'Finanzas', severity: 'info' },
   FINANCE_CELL_EDIT: { label: 'Celda de tabla editada', icon: '✏️', module: 'Finanzas', severity: 'info' },

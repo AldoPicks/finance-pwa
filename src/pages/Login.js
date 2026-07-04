@@ -76,9 +76,11 @@ function VerifyEmailScreen({ email, password, onBack }) {
   );
 }
 
+// ─── Diálogo de recuperación de contraseña ─────────────────────
+
 // ─── Página principal ─────────────────────────────────────────
 export default function Login() {
-  const { login, register } = useAuth();
+  const { login, register, requestPasswordReset } = useAuth();
   const navigate = useNavigate();
 
   const [tab,      setTab]      = useState(0); // 0=login, 1=registro
@@ -91,6 +93,8 @@ export default function Login() {
   const [pendingVerify, setPendingVerify] = useState(false);
   const [verifyEmail,   setVerifyEmail]   = useState('');
   const [verifyPass,    setVerifyPass]    = useState('');
+
+  // ✅ Estado para recuperación de contraseña
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -133,6 +137,10 @@ export default function Login() {
     setTab(0);
     setForm({ email: '', password: '', name: '', confirmPass: '' });
     setError('');
+  };
+
+  const handleRequestRecovery = () => {
+    navigate('/recover');
   };
 
   const fillDemo = () => setForm({ ...form, email: 'demo@finanzaspro.com', password: 'demo123' });
@@ -207,11 +215,18 @@ export default function Login() {
             </Box>
 
             {tab === 0 && (
-              <Box sx={{ mt: 1, p: 2, background: 'rgba(79,195,247,0.06)', borderRadius: 2, border: '1px dashed rgba(79,195,247,0.2)' }}>
-                <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>Credenciales de demo:</Typography>
-                <Chip label="demo@finanzaspro.com / demo123" size="small" onClick={fillDemo}
-                  sx={{ fontFamily: 'DM Mono', fontSize: '0.7rem', cursor: 'pointer', background: 'rgba(79,195,247,0.15)', color: '#4fc3f7', '&:hover': { background: 'rgba(79,195,247,0.25)' } }} />
-              </Box>
+              <>
+                <Button fullWidth variant="text" size="small" onClick={handleRequestRecovery}
+                  sx={{ color: '#4fc3f7', fontFamily: 'Syne', fontSize: '0.78rem', mb: 2, '&:hover': { bgcolor: 'rgba(79,195,247,0.08)' } }}>
+                  🔄 ¿Olvidaste tu contraseña?
+                </Button>
+
+                <Box sx={{ mt: 1, p: 2, background: 'rgba(79,195,247,0.06)', borderRadius: 2, border: '1px dashed rgba(79,195,247,0.2)' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 1 }}>Credenciales de demo:</Typography>
+                  <Chip label="demo@finanzaspro.com / demo123" size="small" onClick={fillDemo}
+                    sx={{ fontFamily: 'DM Mono', fontSize: '0.7rem', cursor: 'pointer', background: 'rgba(79,195,247,0.15)', color: '#4fc3f7', '&:hover': { background: 'rgba(79,195,247,0.25)' } }} />
+                </Box>
+              </>
             )}
           </>
         )}
@@ -220,6 +235,8 @@ export default function Login() {
           {FULL_VERSION}
         </Typography>
       </Paper>
+
+      {/* ✅ Dialog de recuperación de contraseña */}
     </Box>
   );
 }

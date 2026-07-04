@@ -3,14 +3,14 @@ import {
   Box, Typography, IconButton,
   Grid, Paper, Snackbar, Alert, Tooltip, Chip, Drawer, List, ListItem,
   ListItemButton, ListItemIcon, ListItemText, Divider, Button, AppBar, Toolbar, Switch,
-  CircularProgress,
+  CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions, TextField, InputAdornment,
 } from '@mui/material';
 import {
   AccountBalance, Logout, TrendingUp, TrendingDown, Savings, Warning,
   SwapHoriz, Dashboard as DashboardIcon, History, Person, Menu as MenuIcon,
   SaveAlt, CheckCircle, ReceiptLong, Category as CategoryIcon,
   CreditCard, DarkMode, LightMode, ManageSearch,
-  PictureAsPdf, TableChart,
+  PictureAsPdf, TableChart, Lock, Visibility, VisibilityOff,
 } from '@mui/icons-material';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
@@ -308,11 +308,124 @@ function DashboardHome() {
   );
 }
 
+// ─── Dialog para cambiar contraseña (cuando usa contraseña temporal) ───
+function ChangePasswordDialog({ open, onClose, onConfirm, loading }) {
+  const [currentPass, setCurrentPass] = useState('');
+  const [newPass, setNewPass] = useState('');
+  const [confirmPass, setConfirmPass] = useState('');
+  const [showPass, setShowPass] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleConfirm = () => {
+    setError('');
+    if (!currentPass || !newPass || !confirmPass) {
+      setError('Todos los campos son obligatorios');
+      return;
+    }
+    if (newPass !== confirmPass) {
+      setError('Las nuevas contraseñas no coinciden');
+      return;
+    }
+    if (newPass.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+    onConfirm(currentPass, newPass);
+  };
+
+  const handleClose = () => {
+    setCurrentPass('');
+    setNewPass('');
+    setConfirmPass('');
+    setShowPass(false);
+    setError('');
+    onClose();
+  };
+
+  return (
+    <Dialog open={open} onClose={handleClose} maxWidth="sm" fullWidth disableEscapeKeyDown
+      PaperProps={{ sx: { bgcolor: '#0f2040', border: '1px solid rgba(79,195,247,0.2)', borderRadius: 3 } }}>
+      <DialogTitle sx={{ fontFamily: 'Syne', fontWeight: 800 }}>
+        🔐 Cambiar contraseña
+      </DialogTitle>
+      <DialogContent sx={{ pt: 1.5 }}>
+        <Typography variant="body2" sx={{ mb: 2.5, color: 'text.secondary' }}>
+          Iniciaste sesión con una contraseña temporal. Por seguridad, debes cambiarla ahora mismo.
+        </Typography>
+
+        {error && <Alert severity="error" sx={{ mb: 2, borderRadius: 2 }}>{error}</Alert>}
+
+        <TextField
+          fullWidth label="Contraseña temporal actual" type={showPass ? 'text' : 'password'} value={currentPass}
+          onChange={(e) => setCurrentPass(e.target.value)} disabled={loading} sx={{ mb: 2 }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><Lock sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> }}
+        />
+
+        <TextField
+          fullWidth label="Nueva contraseña" type={showPass ? 'text' : 'password'} value={newPass}
+          onChange={(e) => setNewPass(e.target.value)} disabled={loading} sx={{ mb: 2 }}
+          InputProps={{
+            startAdornment: <InputAdornment position="start"><Lock sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment>,
+            endAdornment: <InputAdornment position="end">
+              <IconButton onClick={() => setShowPass(!showPass)} edge="end" size="small" disabled={loading}>
+                {showPass ? <VisibilityOff sx={{ fontSize: 18 }} /> : <Visibility sx={{ fontSize: 18 }} />}
+              </IconButton>
+            </InputAdornment>,
+          }}
+        />
+
+        <TextField
+          fullWidth label="Confirmar nueva contraseña" type={showPass ? 'text' : 'password'} value={confirmPass}
+          onChange={(e) => setConfirmPass(e.target.value)} disabled={loading}
+          InputProps={{ startAdornment: <InputAdornment position="start"><Lock sx={{ fontSize: 18, color: 'text.secondary' }} /></InputAdornment> }}
+        />
+      </DialogContent>
+      <DialogActions sx={{ gap: 1, px: 3, pb: 2.5 }}>
+        <Button onClick={handleClose} disabled={loading} sx={{ color: 'text.secondary' }}>
+          Cancelar
+        </Button>
+        <Button onClick={handleConfirm} variant="contained" disabled={loading}
+          sx={{ background: 'linear-gradient(90deg,#4fc3f7,#00e5ff)', color: '#0a1628', fontFamily: 'Syne', fontWeight: 800 }}>
+          {loading ? 'Cambiando...' : 'Cambiar contraseña'}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 // ─── Layout principal ────────────────────────────────────────
 export default function Dashboard() {
+  const { user, changePassword, clearTemporaryPassword } = useAuth();
   const { rate }   = useExchangeRate();
   const { isDark } = useThemeMode();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // ✅ Dialog para cambiar contraseña temporal
+  const [changePassOpen, setChangePassOpen] = useState(false);
+  const [changePassLoading, setChangePassLoading] = useState(false);
+  const [changePassError, setChangePassError] = useState('');
+
+  // ✅ Mostrar dialog si el usuario inició con contraseña temporal
+  React.useEffect(() => {
+    if (user?.hasTemporaryPassword) {
+      setChangePassOpen(true);
+    }
+  }, [user?.hasTemporaryPassword]);
+
+  const handleChangePassword = async (currentPass, newPass) => {
+    setChangePassLoading(true);
+    setChangePassError('');
+    try {
+      await changePassword(currentPass, newPass);
+      await clearTemporaryPassword();
+      setChangePassOpen(false);
+      // Mostrar mensaje de éxito (opcional)
+    } catch (err) {
+      setChangePassError(err.message);
+    } finally {
+      setChangePassLoading(false);
+    }
+  };
 
   const topbarBg = isDark
     ? 'rgba(11,28,56,0.97)'
@@ -380,6 +493,14 @@ export default function Dashboard() {
           </Routes>
         </Box>
       </Box>
+
+      {/* ✅ Dialog para cambiar contraseña temporal */}
+      <ChangePasswordDialog
+        open={changePassOpen}
+        onClose={() => {}} // No permitir cerrar sin cambiar
+        onConfirm={handleChangePassword}
+        loading={changePassLoading}
+      />
     </Box>
   );
 }
